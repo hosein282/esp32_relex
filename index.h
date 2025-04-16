@@ -3,13 +3,13 @@ const char index_html[] PROGMEM = R"rawliteral(
 <html>
 
 <head>
-    <title>ESP Web Server</title>
+    <title>HubWay</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
     <link rel="icon" href="data:,">
- <style>
-       html {
-
-            font-family: Arial;
+    <style>
+        html {
+            min-width: 380px;
             margin: 0;
             display: flex;
             justify-content: center;
@@ -128,12 +128,13 @@ const char index_html[] PROGMEM = R"rawliteral(
         }
 
         .btn-box {
-            max-width: 450px;
-            margin: 16px;
+            max-width: 430px;
+            margin: auto 16px;
             box-sizing: border-box;
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
+            align-items: center;
             position: relative;
 
 
@@ -187,19 +188,23 @@ const char index_html[] PROGMEM = R"rawliteral(
         .editor-1.show {
             transform: translate(0px, 135px);
         }
- .antenna{
+
+        .antenna {
             display: flex;
             align-items: end;
             padding-bottom: 4px;
             margin-left: 14px;
+            flex-direction: row-reverse;
         }
-        .antenna>li{
+
+        .antenna>li {
 
             margin: 0px 2px;
             box-sizing: border-box;
             padding: 0;
 
         }
+
         .editor-1 {
             box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 18px;
             background-color: #e5e5e5;
@@ -338,6 +343,8 @@ const char index_html[] PROGMEM = R"rawliteral(
             display: flex;
             flex-direction: column;
             padding: 0 4px;
+            margin-left: auto;
+            margin-right: auto;
 
         }
 
@@ -348,33 +355,52 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         .row-times {
             display: flex;
-            width: auto;
-            justify-content: center;
+            justify-content: space-between;
             align-items: center;
             cursor: pointer;
+            direction: rtl;
+
 
         }
 
-
         .row-times span {
-            color: #000;
-            font-weight: 600;
-            text-align: left;
+            color: #ece9e9bd;
+            font-weight: 400;
+            text-align: right;
+
         }
 
         .row-time {
             display: flex;
             height: 60px;
-            justify-content: start;
+            justify-content: end;
             align-items: center;
             background-color: #ffffff;
             border-radius: 18px;
             margin: 12px 0;
             text-align: left;
-
         }
 
+        .row-info {
+            max-width: 350px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            direction: rtl;
+            margin: 0px 10px;
+        }
+        .info{
+            background-color: #243d72;
+            border-radius: 12px;
+            max-width: 380px;
+            padding: 8px 0px;
+            margin-bottom: 10px;
+        }
 
+        .flex>*:first-child {
+            margin-right: auto;
+        }
 
         .row-labels {
             text-align: left;
@@ -406,21 +432,29 @@ const char index_html[] PROGMEM = R"rawliteral(
         button.active {
             background-color: #91cca0;
         }
+
         #gsm {
-            color: #9AACB0;
+            color: #d4d4d4;
             display: flex;
+            flex-direction: row-reverse;
             align-items: end;
+            justify-content: space-between;
             font-size: 14px;
-            margin-left: 8px;
+            margin-right: 8px;
+            width: 160px;
+
         }
+
+
         .radio-btn {
             margin: 0 auto;
             border: none;
             height: 18px;
             width: 18px;
-            margin-right: 14px;
+            margin-left: 14px;
             outline: none;
         }
+
         .sta-dialog {
             background-color: #e5e5e5;
             height: 150px;
@@ -454,11 +488,13 @@ const char index_html[] PROGMEM = R"rawliteral(
             cursor: pointer;
             padding: 2px 0px;
         }
+
         li {
             display: inline;
             padding: 0 4px;
             position: relative;
         }
+
         .inner-title {
             font-size: 12px;
             color: #16151c;
@@ -467,6 +503,7 @@ const char index_html[] PROGMEM = R"rawliteral(
             padding: 0 auto;
             font-weight: 600;
         }
+
         .timer_alert {
             box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 18px;
             background-color: #e5e5e5;
@@ -492,25 +529,148 @@ const char index_html[] PROGMEM = R"rawliteral(
         .timer_alert>span {
             color: #000;
         }
+
+        .inputs {
+            display: flex;
+        }
+
+        .slidecontainer {
+            margin: 20px auto;
+        }
+
+        .digital {
+            margin: 20px auto;
+
+            display: flex;
+            align-items: center;
+            margin: 20px auto;
+            justify-content: space-between;
+        }
+
+        .temp {
+            display: flex;
+            align-items: center;
+            margin: 20px auto;
+            justify-content: space-between;
+        }
+
+        /* Style the tab */
+        .tab {
+            overflow: hidden;
+            direction: rtl;
+            width: 380px;
+        }
+        /* Style the buttons that are used to open the tab content */
+        .tab button {
+            float: left;
+            width: 126px;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 0px 0px;
+            transition: 0.3s;
+            border-radius: 10px 10px 0 0;
+
+        }
+
+        /* Change background color of buttons on hover */
+        .tab button:hover {
+            background-color: #4758b8;
+        }
+
+
+        /* Create an active/current tablink class */
+        .tab button.active {
+            background-color: #243d72;
+        }
+
+        /* Style the tab content */
+        .tabcontent {
+            display: none;
+            padding: 6px 12px;
+            border-top: none;
+            position: relative;
+        }
+
+        .tab-before {
+            height: 1px;
+            width: 380px;
+            background-color: #e0d7d75b;
+        }
+
+        .tablinks {
+
+            background-color: #4659ad00;
+            color: #c4e7fd;
+        }
+
+        .analogs>meter {
+            width: 200px;
+
+
+        }
+
+        .analogs {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            margin: 20px 0px;
+
+        }
+
+        .ain-value {
+            width: 30px;
+        }
+
+        .in-label {
+            font-weight: 400;
+        }
+
+        .in-value {
+            color: #a9bcf1;
+        }
+
+        .divider {
+            height: 1px;
+            width: 360px;
+            background-color: #5c6c81;
+        }
     </style>
 </head>
 
 <body>
-    <h4>Smart Switch</h4>
-    <section class="row-times">
+    <h4>HubWay</h4>
+    <section class="info">
 
-        <h5>GSM Signal Quality : <h6 id="gsm"></h6>
-        </h5>
+    <section class="row-info">
+        <h5> ساعت دستگاه : </h5>
+        <h5 id="dateTime"></h5>
     </section>
-    <section class="row-times">
-        <h5 id="sensor_1"> SENSOR : <h6 id="sensor1"></h6>
-        </h5>
+    <section class="row-info">
 
+        <h5> شبکه : </h5>
+        <h5 id="gsm"> </h5>
+    </section>
+    <section class="row-info">
+        <h5> اینترنت دستگاه : </h5>
+        <h5 id="status"></h5>
     </section>
 
 
-    <div class="btn-box" id="btn-box">
+
+    </section>
+    <!-- tab bar labels -->
+    <div class="tab">
+        <button class="tablinks" onclick="openTab(event, 'pwm-tab')">PWM</button>
+        <button class="tablinks" onclick="openTab(event, 'inputs-tab')">ورودی</button>
+        <button class="tablinks active" onclick="openTab(event, 'btn-box')">خروجی</button>
     </div>
+    <div class="tab-before"></div>
+    <div class="tabcontent btn-box" id="btn-box" style="display: block;"></div>
+    <div class="tabcontent" id="inputs-tab"></div>
+    <div class="tabcontent" id="pwm-tab"></div>
+
+    <!-- tabs -->
 
     <dialog class="s-dialog" id="editor-1">
         <div class="editor-1">
@@ -559,7 +719,7 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <input class="radio-btn" type="radio" id="interval" name="timer-type" value="interval">
 
                 <div class="timebox">
-                    <label>Per Hours</label>
+                    <label>Per Hour</label>
                     <section class="row-times">
                         <div class="start">
                             <select name="per_h" id="per_h"></select>
@@ -570,7 +730,7 @@ const char index_html[] PROGMEM = R"rawliteral(
                 </div>
 
                 <div class="timebox">
-                    <label>To</label>
+                    <label>On Time</label>
                     <section class="row-times">
                         <div class="start">
                             <select name="interval_h" id="interval_h"></select>
@@ -586,6 +746,23 @@ const char index_html[] PROGMEM = R"rawliteral(
 
             </div>
 
+            <div class="row-time">
+                <input class="radio-btn" type="radio" id="cyclic" name="timer-type" value="cyclic">
+
+                <div class="timebox">
+                    <label>On</label>
+                    <section class="row-times">
+                        <div class="start">
+                            <select name="on-min" id="on-min"></select>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="timebox">
+                    <label>Off</label>
+
+                </div>
+            </div>
 
             <div class="row-time">
                 <input class="radio-btn" type="radio" id="off" name="timer-type" value="off">
@@ -612,7 +789,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     <dialog class="s-dialog" id="s-dialog" value="error">
         <div class="sta-dialog" id="sta-dialog">
-           
+
 
         </div>
     </dialog>
@@ -638,8 +815,12 @@ const char index_html[] PROGMEM = R"rawliteral(
 
 
     <script>
-        var PlaceHolder = '%BUTTONPLACEHOLDER%';
+         var PlaceHolder = '%BUTTONPLACEHOLDER%';
         var relays;
+        var analogs;
+        var digitals;
+        var temps;
+        var pwms;
         var jsonData = JSON.parse(PlaceHolder);
         let selectedId;
 
@@ -655,19 +836,45 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         window.onload = onLoaded;
 
-       function showDialog(text, type) {
+        function onUpdate() {
+            updateModelJson({ "mac": "A8:42:E3:90:89:D0", "event": "report", "oSt": "010011000000", "iSt": '01', "ain": [200, 4000], "temps": [20, 15, 10], "pwm": "0,52" });
+        }
+
+        function openTab(evt, cityName) {
+            // Declare all variables
+            var i, tabcontent, tablinks;
+
+            // Get all elements with class="tabcontent" and hide them
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+
+            // Get all elements with class="tablinks" and remove the class "active"
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+
+            // Show the current tab, and add an "active" class to the button that opened the tab
+            document.getElementById(cityName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+
+
+        function showDialog(text, type) {
             const dialog = document.getElementById('s-dialog');
             const dialog_container = document.getElementById('sta-dialog');
             const dialog_icon = document.createElement('div');
             dialog_container.innerHTML = "";
 
-            dialog_icon.innerHTML = type === "error" ? "&#x2715" :"&#x2716" ;
-            dialog_icon.style.color = type === "error" ? "red" :`#616179`;
-            dialog_icon.style.fontSize =  "28px";
+            dialog_icon.innerHTML = type === "error" ? "&#x2715" : "&#x2716";
+            dialog_icon.style.color = type === "error" ? "red" : `#616179`;
+            dialog_icon.style.fontSize = "28px";
 
             var newPara = document.createElement('h3');
             newPara.innerText = text ?? 'Success';
-            newPara.style.color =  type === "error" ?  "red"  : `#616179`;
+            newPara.style.color = type === "error" ? "red" : `#616179`;
             dialog_container.appendChild(dialog_icon);
             dialog_container.appendChild(newPara);
             //dialog.style.backgroundColor = col;
@@ -697,7 +904,7 @@ const char index_html[] PROGMEM = R"rawliteral(
                     checkbox.checked = !state;
                     console.log(dialog.value);
                 } else {
-                    showDialog("Connection Error!","error");
+                    showDialog("Connection Error!", "error");
                     console.log(this.status);
                 }
 
@@ -705,7 +912,8 @@ const char index_html[] PROGMEM = R"rawliteral(
             closeMyModal("timer_alert");
 
         }
-         function modelJson(data) {
+
+        function modelJson(data) {
             console.log(jsonData);
             // Convert JSON data to an array of Relay objects
 
@@ -723,10 +931,215 @@ const char index_html[] PROGMEM = R"rawliteral(
             });
 
             //update network value
-            document.getElementById("gsm").innerText = data["network"];
+            document.getElementById("gsm").innerText = data["nt"] == "mci" ? "IR-MCI" : data["nt"] == "irancell" ? "Irancell" : "بدون سیم";
+            createSignal(data["sig"]);
+            document.getElementById("status").innerText = data["status"] == "ONLINE" ? "آنلاین" : "افلاین";
+            if (data['date']) {
+                var d = new Date(data["date"] * 1000);
+                d = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')} - ${d.getFullYear()}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
+                console.log(d);
+                document.getElementById("dateTime").innerText = d;
+            }
+            if (data.temps) {
+                temps = data.temps.map((v, i) => new Temp(i + 1, v));
+                temps.forEach((e) => createTemps(e));
+            }
+            if (data.ain) {
+                analogs = data.ain.map((v, i) =>
+                    new Analog(i, i + 1, v)
+                );
+                analogs.forEach((e) => createAnalog(e));
+            }
+            if (data.iSt) {
+                digitals = data.iSt.split('').map((t, i) => new Digital(i, "", t == '1' ? 1 : 0));
+                digitals.forEach((e) => createDigitals(e));
+            }
+            if (data.pwm) {
+                pwms = data.pwm.split(',').map((t, i) => new Analog(i, i + 1, t));
+                pwms.forEach((p) => createPwm(p));
+            }
+            //  console.log(analogs);
+            //  console.log(temps);
+            //  console.log(digitals);
+            // console.log(pwms);
+        }
+        function updateModelJson(data) {
+            //update network value
+            if (data["nt"]) {
+                document.getElementById("gsm").innerText = data["nt"] == "mci" ? "IR-MCI" : data["nt"] == "irancell" ? "Irancell" : "بدون سیم";
+            }
+            if (data["status"]) {
+                document.getElementById("status").innerText = data["status"] == "ONLINE" ? "انلاین" : "افلاین";
+            }
+            if (data['date']) {
+                var d = new Date(data["date"] * 1000);
+                d = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')} - ${d.getFullYear()}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
+                document.getElementById("dateTime").innerText = d;
+            }
+            if (data.oSt) {
+                const switches = document.getElementsByClassName('switch-outer');
+                const states = data.oSt.split("");
+                Array.from(switches).forEach((e, i) => {
+                    const s = e.getElementsByTagName('input');
+                    s[0].checked = states[(i * 2) + 1] == "1";
 
+                });
+            }
+            if (data.temps) {
+                const temps = document.getElementsByClassName('temp');
+                Array.from(temps).forEach((e, i) => {
+                    const b = document.getElementById('temp' + i);
+                    e.firstChild.innerHTML = data.temps[i]
+                });
+            }
+            if (data.ain) {
+                const analogs = document.getElementsByClassName('analogs');
+                Array.from(analogs).forEach((e, i) => {
+                    const b = document.getElementById('analog' + i);
+                    if (b) b.value = data.ain[i];
+                    e.lastChild.innerHTML = data.ain[i]
+
+                });
+            }
+            if (data.iSt) {
+                const digitals = document.getElementsByClassName('digital');
+                const iSt = data.iSt.split("");
+                Array.from(analogs).forEach((v, i) => {
+                    console.log('digital' + i);
+                    const b = document.getElementById('digital' + i);
+                    if (b) b.innerHTML = iSt[i] == 1 ? "خاموش" : "روشن";
+                });
+            }
+            if (data.pwm) {
+                const pwms = document.getElementsByClassName('pwmcontainer');
+                const list = data.pwm.split(',');
+                Array.from(pwms).forEach((e, i) => {
+                    const b = document.getElementById('pwm' + i);
+                    if (b) b.value = list[i];
+                    e.lastChild.innerHTML = list[i]
+                });
+            }
+            //  console.log(analogs);
+            //  console.log(temps);
+            //  console.log(digitals);
+            //  console.log(pwms);
+        }
+
+        function createPwm(pwm) {
+            const inputs = document.getElementById("pwm-tab");
+
+            const slidecontainer = document.createElement("div");
+            const input = document.createElement("input");
+            const span = document.createElement("span");
+            const label = document.createElement("span");
+            const divider = document.createElement("div");
+            divider.classList.add('divider');
+            input.type = 'range';
+            input.min = '0';
+            input.max = '100';
+            input.value = pwm.value;
+            span.innerText = pwm.value;
+            label.innerText = `PWM ${pwm.index+1} `;
+            slidecontainer.classList.add('pwmcontainer');
+            slidecontainer.classList.add('analogs');
+            input.id = 'pwm' + pwm.index;
+
+            input.oninput = function () {
+                span.innerText = this.value;
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", "/update?pwm=" + pwm.index + `&state=${this.value}`, true);
+                xhr.send();
+            }
+            label.classList.add('in-label');
+            span.classList.add('in-value');
+
+            slidecontainer.appendChild(span);
+            slidecontainer.appendChild(input);
+            slidecontainer.appendChild(label);
+
+            inputs.appendChild(slidecontainer);
+            inputs.appendChild(divider);
 
         }
+        function onchangeSlide(e) {
+            console.log(e);
+        }
+        function createDigitals(digital) {
+            const inputs = document.getElementById("inputs-tab");
+            const slidecontainer = document.createElement("div");
+            const span = document.createElement("span");
+            const label = document.createElement("span");
+            const divider = document.createElement("div");
+            divider.classList.add('divider');
+
+            span.innerText = `${digital.state == 0 ? "خاموش" : "روشن"}`;
+            label.innerText = `دیجیتال ${digital.index + 1} `;
+            slidecontainer.classList.add('digital');
+            span.id = 'digital' + digital.index;
+            label.classList.add('in-label');
+            span.classList.add('in-value');
+
+
+            slidecontainer.appendChild(span);
+            slidecontainer.appendChild(label);
+            inputs.appendChild(slidecontainer);
+            inputs.appendChild(divider);
+
+        }
+        function createAnalog(analog) {
+            const inputs = document.getElementById("inputs-tab");
+
+            const slidecontainer = document.createElement("div");
+            const input = document.createElement("meter");
+            const span = document.createElement("div");
+            const divider = document.createElement("div");
+            divider.classList.add('divider');
+            span.classList.add('ain-value');
+            const label = document.createElement("span");
+            label.classList.add('in-label');
+            span.classList.add('in-value');
+
+
+            input.min = '1';
+            input.max = '4096';
+            input.value = analog.value;
+            span.innerText = analog.value;
+            label.innerText = `آنالوگ ${analog.index + 1}`;
+            slidecontainer.classList.add('analogs');
+            input.id = 'analog' + analog.index;
+
+            slidecontainer.appendChild(span);
+            slidecontainer.appendChild(input);
+            slidecontainer.appendChild(label);
+            inputs.appendChild(slidecontainer);
+            inputs.appendChild(divider);
+
+        }
+
+        function createTemps(temp) {
+            const inputs = document.getElementById("inputs-tab");
+            const slidecontainer = document.createElement("div");
+            const span = document.createElement("span");
+            const label = document.createElement("span");
+            const divider = document.createElement("div");
+            divider.classList.add('divider');
+            if (temp.value == -127) {
+                span.innerText = '-' ;
+            } else {
+                span.innerText = `${temp.value.toFixed(2)} ℃`;
+            }
+            label.innerText = `دماسنج ${temp.name}`;
+            slidecontainer.classList.add('temp');
+            label.classList.add('in-label');
+            span.classList.add('in-value');
+
+            slidecontainer.appendChild(span);
+            slidecontainer.appendChild(label);
+            inputs.appendChild(slidecontainer);
+            inputs.appendChild(divider);
+
+        }
+
         function convertStringToHexUnicode(originalString) {
             let formattedString = Array.from(originalString).map(char => {
                 let codePoint = char.codePointAt(0);
@@ -978,6 +1391,34 @@ const char index_html[] PROGMEM = R"rawliteral(
             }
         }
 
+
+
+        class Analog {
+            constructor(index, name, value) {
+                this.index = index;
+                this.name = name;
+                this.value = value;
+
+            }
+        }
+
+
+        class Digital {
+            constructor(index, name, state) {
+                this.index = index;
+
+                this.name = name;
+                this.state = state;
+            }
+        }
+        class Temp {
+            constructor(name, value) {
+                this.name = name;
+                this.value = value;
+            }
+        }
+
+
         function onLoaded(index) {
             modelJson(jsonData);
             //let el = document.getElementById("0");
@@ -1107,6 +1548,11 @@ const char index_html[] PROGMEM = R"rawliteral(
             } else if (timerSch.length == 16) {
                 let radio = document.getElementById("interval");
                 radio.checked = true;
+            } else if (timerSch.length > 2 && timerSch.length < 4) { // Assuming cyclic timer length is 3
+                let radio = document.getElementById("cyclic");
+                radio.checked = true;
+
+
             } else {
                 let radio = document.getElementById("off");
                 radio.checked = true;
@@ -1180,7 +1626,9 @@ const char index_html[] PROGMEM = R"rawliteral(
             createOptionList("interval_h", 24, interval_h);
             createOptionList("interval_m", 60, interval_m);
 
+            o_m = parseInt(time.substring(9, 11));
 
+            createOptionList("on-min", 60, o_m);
 
             //item.classList.toggle("show");
             //btn.classList.toggle("show");
@@ -1251,9 +1699,8 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         }
         function prepareTimer() {
-
             let str = "";
-            //days
+            // Days
             for (let i = 0; i < daysInt.length; i++) {
                 if (Number.isInteger(daysInt[i])) {
                     str += daysInt[i];
@@ -1261,26 +1708,25 @@ const char index_html[] PROGMEM = R"rawliteral(
                     str += "*";
                 }
             }
-            // hours
+
+            // Timer types
             let radio_interval = document.getElementById("interval");
             let start_stop = document.getElementById("start-stop");
+            let cyclic = document.getElementById("cyclic");
 
             if (radio_interval.checked) {
                 var per_hour = document.getElementById("per_h");
                 let interval_hour = document.getElementById("interval_h");
                 let interval_min = document.getElementById("interval_m");
 
-
                 per_h = per_hour.options[per_hour.selectedIndex].value;
                 interval_h = interval_hour.options[interval_hour.selectedIndex].value;
                 interval_m = interval_min.options[interval_min.selectedIndex].value;
 
                 str += "/";
-
                 str += per_h > 9 ? per_h : `0${per_h}`;
                 str += "/";
                 str += interval_h > 9 ? interval_h : `0${interval_h}`;
-
                 str += ":";
                 str += interval_m > 9 ? interval_m : `0${interval_m}`;
                 console.log(str);
@@ -1297,59 +1743,96 @@ const char index_html[] PROGMEM = R"rawliteral(
                 e_m = end_min.options[end_min.selectedIndex].value;
 
                 str += "/";
-
                 str += s_h > 9 ? s_h : `0${s_h}`;
                 str += ":";
                 str += s_m > 9 ? s_m : `0${s_m}`;
-
                 str += e_h > 9 ? e_h : `0${e_h}`;
                 str += ":";
                 str += e_m > 9 ? e_m : `0${e_m}`;
                 console.log(str);
                 return str;
-            } else {
+            } else if (cyclic.checked) {
+                str = "";
+                let on_min = document.getElementById("on-min");
+                o_m = on_min.options[on_min.selectedIndex].value;
 
+                str += "t";
+
+
+                str += o_m;
+                console.log(str);
+                return str;
+            } else {
                 return "";
             }
-
         }
         String.prototype.replaceAt = function (index, replacement) {
             return this.substring(0, index) + replacement + this.substring(index + replacement.length);
         }
-         function createSignal(signal) {
+        function syncDateTime() {
+
+            const date = new Date();
+            const offset = date.getTimezoneOffset();
+            var adjustedDate = new Date(date.getTime() - offset * 60 * 1000);
+            const pad = n => n.toString().padStart(2, '0');
+
+            const year = date.getFullYear().toString().slice(-2); // Last 2 digits of year
+            const month = pad(date.getMonth() + 1);
+            const day = pad(date.getDate());
+            const hours = pad(date.getHours());
+            const minutes = pad(date.getMinutes());
+            const seconds = pad(date.getSeconds());
+
+            adjustedDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+            console.log(adjustedDate);
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/update?date=" + adjustedDate, true);
+            xhr.send();
+        }
+
+        function createSignal(signal) {
             let count = 0;
-            const ant = document.createElement("div");
-            ant.classList.add("antenna") ;
-            ant.id = "antenna";
-            if(signal == 0 || signal >34){
+
+            var ant = document.getElementById("antenna");
+            if (!ant) {
+                ant = document.createElement("div");
+                ant.classList.add("antenna");
+                ant.id = "antenna";
+            }
+            ant.innerHTML = "";
+
+            if (signal == 0 || signal > 34) {
                 const sec = document.createElement("li");
                 sec.innerText = "x";
                 sec.style.color = "red";
                 ant.style.paddingBottom = "0px";
                 ant.appendChild(sec);
 
-            }else{
+            } else {
                 for (let i = 0; i < 6; i++) {
                     const sec = document.createElement("li");
-                        count = i*5;
+                    count = i * 5;
                     sec.style.height = `${(i * 3)}px`;
                     sec.style.width = "2px";
-                    if(  signal <count){
+                    if (signal < count) {
                         sec.style.backgroundColor = "#3c3950";
-                    }else{
+                    } else {
                         sec.style.backgroundColor = "white";
                     }
 
                     ant.appendChild(sec);
                 }
             }
-            const signalEl = document.getElementById("gsm");
-             try {
-                signalEl.removeChild(signalEl.getElementById("antenna"));
-            } catch (e) {
-                console.log(e);
-            }
-            signalEl.appendChild(ant);
+
+            const gsm = document.getElementById("gsm");
+
+
+            // if (gsm.hasChildNodes) {
+            // Remove the first child node
+            //     gsm.removeChild(anten);
+            //   }
+
+            gsm.appendChild(ant);
         }
         function toggleTimer(element) {
             var xhr = new XMLHttpRequest();
@@ -1377,27 +1860,40 @@ const char index_html[] PROGMEM = R"rawliteral(
                 console.log("gsm", e.data);
                 document.getElementById("gsm").innerHTML = e.data;
             }, false);
-            source.addEventListener('sensor_1', function (e) {
-                console.log("sensor_1", e.data);
-                document.getElementById("sensor_1").innerHTML = e.data;
+            source.addEventListener('date', function (e) {
+                console.log("date", e.data);
+
+                const date = new Date();
+                const offset = date.getTimezoneOffset();
+                var adjustedDate = new Date(date.getTime() - offset * 60 * 1000);
+                const pad = n => n.toString().padStart(2, '0');
+
+                const year = date.getFullYear().toString().slice(-2); // Last 2 digits of year
+                const month = pad(date.getMonth() + 1);
+                const day = pad(date.getDate());
+                const hours = pad(date.getHours());
+                const minutes = pad(date.getMinutes());
+                const seconds = pad(date.getSeconds());
+
+                adjustedDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", "/update?date=" + adjustedDate, true);
+                xhr.send();
             }, false);
+
             source.addEventListener('signal', function (e) {
                 console.log("signal", e.data);
                 createSignal(e.data);
             }, false);
-              source.addEventListener('data', function (e) {
+            source.addEventListener('data', function (e) {
                 console.log("data", e.data);
-                modelJson(JSON.parse(e.data));
+                updateModelJson(JSON.parse(e.data));
             }, false);
-                source.addEventListener('refresh', function (e) {
+            source.addEventListener('refresh', function (e) {
                 console.log("refresh", e.data);
-                    location.reload();
+                location.reload();
             }, false);
         }
-
-
-
-
     </script>
 </body>
 
