@@ -9,7 +9,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     <link rel="icon" href="data:,">
     <style>
         html {
-            min-width: 380px;
+      max-width: 420px;
             margin: 0;
             display: flex;
             justify-content: center;

@@ -9,12 +9,14 @@
 const short VERSION = 2;
 
 #include <WiFi.h>
-// #include <ESPmDNS.h>
+#include <ESPmDNS.h>
 #include <TinyGsmClient.h>
 #include <WiFiClientSecure.h>
 #define SerialAT Serial2
 
-const char apn[] = "mcinet";
+const char mci_apn[] = "mcinet";
+const char irancell_apn[] = "mtnirancell ";
+const char other_apn[] = "internet";
 const char gprsUser[] = "";
 const char gprsPass[] = "";
 
@@ -111,10 +113,9 @@ const uint8_t totalAnalogs = 2;
 
 enum MQTT_NET
 {
-  WIFI = 0,
-  GPRS = 1,
-  OFF = 2,
-
+  OFF = 0,
+  WIFI = 1,
+  GPRS = 2,
 };
 MQTT_NET mqttNet = OFF;
 
@@ -263,7 +264,6 @@ output outputs[totalOutputs] = {
      0,
      0}};
 
-
 output pwms[totalPwm] = {
     {"pwm1",
      "pS1",
@@ -299,7 +299,6 @@ String buffer;
 unsigned int aResolution = 4095;
 const int freq = 3000; // 3610
 
-
 unsigned int analog_read_threshold = 500; // 4096
 float temp_threshold = 1.0;
 uint8_t signal_threshold = 2;
@@ -329,7 +328,6 @@ Ticker flipper;
 
 // ESP32Time rtc;bu
 ESP32Time rtc(0); // offset in seconds GMT+1
-
 
 // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 
@@ -378,6 +376,7 @@ boolean DEBUG_MODE = 1;
 /// setting variables
 bool hasGSM = false;
 bool hasWifi = false;
+bool forceUseGprs = false;
 bool gprsConnected = false;
 bool mqtt_connected = false;
 bool callOnAlert = true;
@@ -777,12 +776,19 @@ void callback(char *topic, byte *payload, unsigned int length)
 
   // Switch on the LED if an 1 was received as first character
 }
+uint8_t mqtt_count = 0;
 
 void reconnect()
 {
+  if (mqtt_count > 6)
+  {
+    hasGSM =  false;
+    hasWifi=  false;
+
+    return;
+  }
   const char *broker = m_server.c_str();
-  Serial.println(broker);
-  if (WiFi.status() == WL_CONNECTED)
+  if (hasWifi && !gprsConnected && !forceUseGprs)
   {
     activeClient = &wifiClient; // Use WiFiClient
     mqtt.setClient(*activeClient);
@@ -792,12 +798,13 @@ void reconnect()
     Serial.println("mqttNet");
     Serial.println(mqttNet);
   }
+  
   else if (gprsConnected)
   {
     activeClient = &gsmClient; // Use TinyGsmClient
 
     mqtt.setClient(*activeClient);
-    mqtt.setServer("5.238.178.210", port);
+    mqtt.setServer(broker, port);
     mqtt.setCallback(callback);
 
     mqttNet = GPRS;
@@ -806,9 +813,8 @@ void reconnect()
   }
   mqtt.setBufferSize(1024);
 
-  uint8_t count = 0;
   // Loop until we're reconnected
-  while (!mqtt.connected() && count < 3)
+  if (!mqtt.connected())
   {
     mqtt_connected = false;
     Serial.print("Attempting MQTT connection...");
@@ -823,6 +829,7 @@ void reconnect()
     payload["event"] = "state";
     payload["mac"] = mac;
     payload["status"] = "OFFLINE";
+    payload["net"] = mqttNet;
 
     char jsonBuffer[128];
     serializeJson(payload, jsonBuffer, sizeof(jsonBuffer));
@@ -839,9 +846,10 @@ void reconnect()
       payload["event"] = "state";
       payload["mac"] = mac;
       payload["status"] = "ONLINE";
+      payload["net"] = mqttNet;
 
-    char jsonBuffer[128];
-    serializeJson(payload, jsonBuffer, sizeof(jsonBuffer));
+      char jsonBuffer[128];
+      serializeJson(payload, jsonBuffer, sizeof(jsonBuffer));
 
       // String peresence = mqttPeresence();
       // mqtt.publish("action_server", JSON.c_str());
@@ -856,7 +864,7 @@ void reconnect()
       Serial.print("failed, rc=");
       Serial.print(mqtt.state());
       // Wait 5 seconds before retrying
-      count = count + 1;
+      mqtt_count = mqtt_count + 1;
       delay(3000);
     }
   }
@@ -986,25 +994,13 @@ bool initWiFi()
       return false;
     }
   }
-  // if (!MDNS.begin("hubway"))
-  // { // Set the hostname to "esp32.local"
-  //   Serial.println("Error setting up MDNS responder!");
-  //   while (1)
-  //   {
-  //     delay(1000);
-  //   }
-  // }
+
+  if (!MDNS.begin("hubway"))
+  { // Set the hostname to "esp32.local"
+    Serial.println("Error setting up MDNS responder!");
+  }
   Serial.print("Current ESP32 IP: ");
   Serial.println(WiFi.localIP());
-  // Serial.print("Gateway (router) IP: ");
-  // Serial.println(WiFi.gatewayIP());
-  // Serial.print("Subnet Mask: ");
-  // Serial.println(WiFi.subnetMask());
-  // Serial.print("Primary DNS: ");
-  // Serial.println(WiFi.dnsIP(0));
-  // Serial.print("Secondary DNS: ");
-  // Serial.println(WiFi.dnsIP(1));
-  // Serial.println(WiFi.localIP());
   hasWifi = true;
   esp_task_wdt_reset();
 
@@ -1159,8 +1155,35 @@ void setupLCD()
   display.display();
 }
 
+void initDisplay()
+{
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setFont(NULL);
+  display.setTextColor(WHITE);
+
+  display.setCursor(12, 2);
+  display.print("Hello Dear!");
+  // display.setCursor(2, 14);
+  // display.println("GSM");
+
+  display.setCursor(2, 24);
+  display.print("TEMP");
+  display.setCursor(2, 44);
+  display.println("NET");
+
+  display.setCursor(2, 34);
+  display.println("WIFI");
+
+  display.setCursor(2, 54);
+  display.println("OUTPUTS");
+  display.display();
+}
+
 void updateDisplay()
 {
+
   String m = String(rtc.getMinute());
   String d = String(rtc.getDate());
   if (m.length() == 1)
@@ -1169,10 +1192,10 @@ void updateDisplay()
   }
   String date = d.substring(d.indexOf(' ') + 1) + " " + String(rtc.getHour(true)) + ":" + m;
 
-  display.clearDisplay();
   display.setTextSize(1);
   display.setFont(NULL);
   display.setTextColor(WHITE);
+  display.fillRect(12, 2, 120, 7, 0);
 
   display.setCursor(12, 2);
   display.print(date);
@@ -1189,6 +1212,70 @@ void updateDisplay()
   {
     display.println("IRANCELL");
   }
+
+  display.fillRect(80, 24, 48, 7, 0);
+
+  String tmp = String(temps[0]);
+  display.setCursor(128 - ((tmp.length() + 2) * 6), 24);
+  display.print(tmp + " C");
+  // if (ssid != "") {
+
+  //   display.setCursor(128 - (ssid.length() * 6), 24);
+  //   display.print(ssid);
+  // } else {
+  //   display.setCursor(86, 24);
+  //   display.print("NOT SET");
+  // }
+  display.fillRect(74, 34, 34, 7, 0);
+
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    display.setCursor(74, 34);
+    display.println("CONNECTED");
+  }
+  else
+  {
+    display.setCursor(110, 34);
+    display.println("OFF");
+  }
+
+  display.fillRect(86, 44, 34, 7, 0);
+
+  if (mqtt_connected)
+  {
+    display.setCursor(104, 44);
+    display.println(mqttNet == 1 ? "WIFI" : "GPRS");
+  }
+  else
+  {
+    display.setCursor(86, 44);
+    display.println("OFFLINE");
+  }
+
+  if (outStates != "")
+  {
+    String outs;
+    for (uint8_t i = 0; i < totalOutputs; i++)
+    {
+      outs += outStates[(i + 1) + 1];
+    }
+    // outStates.replace(",", "");
+    display.fillRect((outs.length() * 6), 54, 128, 7, 0);
+
+    display.setCursor(128 - (outs.length() * 6), 54);
+    display.println(outs);
+  }
+  // display.setCursor(2, 54);
+  // display.println("INPUTS");
+  // if (inStates != "") {
+  //   display.setCursor(128 - (inStates.length() * 6), 54);
+  //   display.println(inStates);
+  // }
+  display.display();
+}
+void updateSignalDisp()
+{
+  display.fillRect(110, 12, 34, 7, 0);
 
   if (signalQuality <= 0 || signalQuality == 99)
   {
@@ -1226,65 +1313,24 @@ void updateDisplay()
     display.fillRect(118, 14, 3, 6, 1);
     display.fillRect(122, 12, 3, 8, 1);
   }
-  display.setCursor(2, 24);
-  display.print("TEMP");
-  String tmp = String(temps[0]);
-  display.setCursor(128 - ((tmp.length() + 2) * 6), 24);
-  display.print(tmp + " C");
-  // if (ssid != "") {
+}
+void updateOperatorDisp()
+{
+  display.fillRect(2, 14, 48, 7, 0);
 
-  //   display.setCursor(128 - (ssid.length() * 6), 24);
-  //   display.print(ssid);
-  // } else {
-  //   display.setCursor(86, 24);
-  //   display.print("NOT SET");
-  // }
-
-  display.setCursor(2, 34);
-  display.println("WIFI");
-  if (WiFi.status() == WL_CONNECTED)
+  display.setCursor(2, 14);
+  if (op == "")
   {
-    display.setCursor(74, 34);
-    display.println(ssid);
+    display.println("GSM");
   }
-  else
+  else if (op == "mci")
   {
-    display.setCursor(110, 34);
-    display.println("OFF");
+    display.println("IR-MCI");
   }
-
-  display.setCursor(2, 44);
-  display.println("NET");
-  if (mqtt_connected)
+  else if (op == "irancell")
   {
-    display.setCursor(104, 44);
-    display.println(mqttNet == 0 ? "WIFI" : "GPRS");
+    display.println("IRANCELL");
   }
-  else
-  {
-    display.setCursor(86, 44);
-    display.println("OFFLINE");
-  }
-  display.setCursor(2, 54);
-  display.println("OUTPUTS");
-  if (outStates != "")
-  {
-    String outs;
-    for (uint8_t i = 0; i < totalOutputs; i++)
-    {
-      outs += outStates[(i + 1) + 1];
-    }
-    // outStates.replace(",", "");
-    display.setCursor(128 - (outs.length() * 6), 54);
-    display.println(outs);
-  }
-  // display.setCursor(2, 54);
-  // display.println("INPUTS");
-  // if (inStates != "") {
-  //   display.setCursor(128 - (inStates.length() * 6), 54);
-  //   display.println(inStates);
-  // }
-  display.display();
 }
 void updateStatesDSP()
 {
@@ -1530,7 +1576,6 @@ void setup()
   if (initWiFi())
   {
 
-    // PubSubClient mqtt(wifiClient);
     reconnect();
   }
   else
@@ -1545,7 +1590,7 @@ void setup()
     {
       gsmCounter = gsmCounter + 1;
       flipper.attach(0.5, flip);
-      loadingDisplay(50 + (gsmCounter * 4), "Setup GSM");
+      loadingDisplay(50 + (gsmCounter * 6), "Setup GSM");
       delay(3000);
       if (gsmCounter > 6)
       {
@@ -1561,12 +1606,15 @@ void setup()
     flipper.attach(1, flip);
     Serial.println("Insert a sim card");
   }
+  loadingDisplay(100, "Completed");
+  delay(500);
+
+  initDisplay();
 
   if (hasGSM)
   {
     setupGSM();
   }
-  loadingDisplay(80, "Setup");
 
   // Initialize Ticker every 0.5s
   //  gsmTicker.attach(3600, getGsmDateTime);  //Use attach_ms if you need time in ms
@@ -1584,11 +1632,6 @@ void setup()
 
     delay(100);
   }
-  loadingDisplay(100, "Completed");
-
-  delay(200);
-
-  updateDisplay();
 
   checkTasks();
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
@@ -2422,11 +2465,16 @@ void initWifiAp()
     mac = getMAC();
   }
   // setupBLE();
-  WiFi.softAP(ssid_ap + mac.substring(0, 2) + mac.substring(15, 17), "2NyTf21=");
+  WiFi.softAP(ssid_ap + mac.substring(0, 2) + mac.substring(9, 11) + mac.substring(15, 17), "2NyTf21=");
 
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
+
+  if (!MDNS.begin("hubway"))
+  { // Set the hostname to "esp32.local"
+    Serial.println("Error setting up MDNS responder!");
+  }
 
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -2879,7 +2927,6 @@ void readButton()
       handleShortPress();
     }
   }
-
 }
 
 void handleShortPress()
@@ -3060,8 +3107,7 @@ void removeAllRemotes()
     if (LittleFS.remove(filePath))
     {
       Serial.println("All remotes removed successfully!");
-    remoteCount = 0;
-
+      remoteCount = 0;
     }
     else
     {
@@ -3289,21 +3335,24 @@ void initSim800Mqtt()
 {
   // Connect to GPRS
   Serial.println("Connecting to GPRS...");
-  if (!modem.gprsConnect(apn, gprsUser, gprsPass))
+
+  Serial.println(mqtt_connected);
+  if (mqtt_connected)
+  {
+    return;
+  }
+
+  if (!modem.gprsConnect(op == "irancell" ? irancell_apn : mci_apn, gprsUser, gprsPass))
   {
     Serial.println("Failed to connect to GPRS");
-    addTask(initSim800Mqtt,20000);
+    addTask(initSim800Mqtt, 20000);
     return;
   }
   if (modem.isGprsConnected())
   {
     Serial.println("GPRS is connected");
     gprsConnected = true;
-    // Connect to MQTT
-    if (!mqtt_connected)
-    {
-      reconnect();
-    }
+    reconnect();
   }
   else
   {
@@ -3311,18 +3360,6 @@ void initSim800Mqtt()
   }
   // Set up MQTT
 }
-void mqttCallback(char *topic, byte *payload, unsigned int length)
-{
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("]: ");
-  for (int i = 0; i < length; i++)
-  {
-    Serial.print((char)payload[i]);
-  }
-  Serial.println();
-}
-
 
 void setupGSM()
 {
@@ -3340,13 +3377,61 @@ void setupGSM()
   initSim800Mqtt();
 }
 
+void manageMqttConnection()
+{
+  // ابتدا تلاش برای اتصال به وای‌فای
+  if (!ssid.isEmpty() && !password.isEmpty())
+  {
+    if (initWiFi())
+    {
+      // اگر وای‌فای متصل شد، MQTT را روی وای‌فای ست کن
+      activeClient = &wifiClient;
+      mqtt.setClient(*activeClient);
+      mqtt.setServer(m_server.c_str(), port);
+      mqtt.setCallback(callback);
+      mqttNet = WIFI;
+      Serial.println(F("MQTT over WiFi"));
+      return;
+    }
+  }
+
+  // اگر وای‌فای نبود یا متصل نشد، تلاش برای اتصال GPRS
+  if (checkSim())
+  {
+    if (!gprsConnected)
+    {
+      if (!modem.gprsConnect(op == "irancell" ? irancell_apn : mci_apn, gprsUser, gprsPass))
+      {
+        Serial.println(F("Failed to connect to GPRS"));
+        mqttNet = OFF;
+        return;
+      }
+      gprsConnected = true;
+    }
+    if (modem.isGprsConnected())
+    {
+      activeClient = &gsmClient;
+      mqtt.setClient(*activeClient);
+      mqtt.setServer(m_server.c_str(), port);
+      mqtt.setCallback(callback);
+      mqttNet = GPRS;
+      Serial.println(F("MQTT over GPRS"));
+      return;
+    }
+  }
+
+  // اگر هیچکدام نبود، MQTT غیرفعال است
+  mqttNet = OFF;
+  Serial.println(F("MQTT not available"));
+}
+
 void checkMqttStatus()
 {
   if (mqtt.connected())
   {
     mqtt.loop();
   }
-  else
+  else if(hasWifi || gprsConnected)
   {
     reconnect();
   }
@@ -3441,7 +3526,7 @@ void getOperator(bool report)
   }
   op = newValue;
 
-  updateDisplay();
+  updateOperatorDisp();
   Serial.println("operator : ");
   Serial.println(result);
   Serial.println(op);
@@ -3480,6 +3565,7 @@ void getSignalQuality(bool report)
     // mqtt.publish("action_server", result.c_str());
     publishReport(result.c_str());
   }
+  updateSignalDisp();
   signalQuality = s;
   Serial.println("signal:");
   Serial.println(s);
@@ -4196,51 +4282,47 @@ void checkTasks()
       }
       else
       {
-        if (mqtt_connected)
-        {
-          String report = prepareDbData("report");
-          publishReport(report.c_str());
-        }
+        // if (mqtt_connected)
+        // {
+        //   String report = prepareDbData("report");
+        //   publishReport(report.c_str());
+        // }
       }
     }
     else if (ssid != "" && password != "" && wifiTryCount < 2)
     {
       initWiFi();
     }
-
-    if (hasGSM && op == "")
+    if (hasGSM)
     {
-      GsmReset();
-      while (!isRegistered())
+      checkSmsHistory();
+      if (op == "")
       {
         GsmReset();
-        flipper.attach(0.5, flip);
-        gsmCounter = gsmCounter + 1;
-        if (gsmCounter > 3)
+        while (!isRegistered())
         {
-          break;
-          // gsmCounter = 0;
+          GsmReset();
+          flipper.attach(0.5, flip);
+          gsmCounter = gsmCounter + 1;
+          if (gsmCounter > 3)
+          {
+            break;
+            // gsmCounter = 0;
+          }
         }
       }
-    }
-    else
-    {
-      checkSim();
+      else
+      {
+        checkSim();
+      }
     }
   }
+
   if (minCounter % 5 == 0)
   {
     if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 2)
     {
       initWiFi();
-    }
-    // if (hasWifi && mqtt_connected) {
-    //   String report = prepareDbData("log");
-    //   mqtt.publish("action_server", report.c_str());
-    // }
-    if (hasGSM)
-    {
-      checkSmsHistory();
     }
   }
   if (minCounter % 2 == 0)
@@ -4254,7 +4336,8 @@ void checkTasks()
       {
         getOperator(mqtt_connected);
       }
-      if(signalQuality == 0){
+      if (signalQuality == 0 || signalQuality == 99)
+      {
         GsmReset();
       }
     }
@@ -4270,7 +4353,7 @@ void checkTasks()
     {
       reconnect();
     }
-    if (deviceYear < 20)
+    if (deviceYear < 20 || deviceYear > 70)
     {
 
       if (hasWifi)
@@ -4281,6 +4364,11 @@ void checkTasks()
       {
         getGsmDateTime();
       }
+    }
+    if (mqtt_connected)
+    {
+      String report = prepareDbLog("log");
+      publishReport(report.c_str());
     }
   }
   // if (mqtt_connected) {
@@ -4610,6 +4698,59 @@ void clearTimer(uint8_t index)
   Serial.println(index);
 }
 
+/**
+ * @brief Handles various actions based on the received message (msg) and phone number.
+ *
+ * This function processes commands sent via SMS or other communication methods to control relays,
+ * set labels, manage timers, configure settings, and more. It supports a wide range of commands
+ * for interacting with the system's outputs, inputs, and configurations.
+ *
+ * @param phoneNumber The phone number associated with the received message.
+ *
+ * Commands:
+ * - Relay Control:
+ *   - "r1on", "r1off": Turns relay 1 on or off (similarly for other relays).
+ *   - "stat": Retrieves the status of all relays.
+ *   - "stat=1": Retrieves the status of relay 1 (similarly for other relays).
+ * - Label Management:
+ *   - "1l=pump": Sets the label of relay 1 to "pump" (similarly for other relays).
+ *   - "labels": Retrieves the labels of all relays.
+ *   - "n1=door": Sets the label of input 1 to "door" (similarly for other inputs).
+ * - Phone Number Management:
+ *   - "p1=09127995883": Registers a phone number for user 1 (similarly for other users).
+ *   - "list": Lists all registered phone numbers.
+ *   - "del=1": Deletes the phone number of user 1 (similarly for other users).
+ *   - "del=all": Deletes all registered phone numbers.
+ * - Timer Management:
+ *   - "t1=10:00": Sets a timer for relay 1 (similarly for other relays).
+ *   - "t1x": Clears the timer for relay 1 (similarly for other relays).
+ *   - "sch": Lists all relay schedules.
+ * - Temperature Monitoring:
+ *   - "temp": Retrieves the current temperature readings from sensors.
+ * - Security and Pump Control:
+ *   - "son": Activates the security system.
+ *   - "soff": Deactivates the security system.
+ *   - "poff": Turns off the pump.
+ * - Notifications:
+ *   - "non": Enables device startup notifications.
+ *   - "noff": Disables device startup notifications.
+ * - System Settings:
+ *   - "set": Retrieves the current system settings.
+ *   - "wipe": Resets the device and clears memory.
+ * - Remote Management:
+ *   - "dr": Deletes all remote configurations.
+ * - Call Alerts:
+ *   - "callon": Enables call alerts.
+ *   - "calloff": Disables call alerts.
+ * - Balance Inquiry:
+ *   - "balance": Requests the balance information from the operator.
+ *
+ * Notes:
+ * - The function uses various helper functions such as `ReplyHex`, `switchRelay`, `writeToEEPROM`,
+ *   `clearSmsVariables`, and others to perform specific tasks.
+ * - Messages are parsed and processed based on specific patterns and keywords.
+ * - The function includes localized responses in Persian for user feedback.
+ */
 void doAction(String phoneNumber)
 {
 
@@ -5212,8 +5353,6 @@ void writeDateTimeEEPROM(const char *addrOffset, const String &strToWrite)
   EEPROM.putString(addrOffset, strToWrite);
 }
 
-
-
 /*******************************************************************************
  * readFromEEPROM function:
  * Store phone numbers in EEPROM
@@ -5333,6 +5472,7 @@ String createSettingArray()
   result += notifyScenarios ? '1' : '0';
   result += hasWifi ? '1' : '0';
   result += hasGSM ? '1' : '0';
+  result += forceUseGprs ? '1' : '0';
   return result;
 }
 
@@ -5356,6 +5496,7 @@ String prepareData()
   //   tmp["value"] = (inputs[i].value.isEmpty()) ? "" : String(inputs[i].state);
   // };
   doc["status"] = mqtt_connected ? "ONLINE" : "OFFLINE";
+  doc["net"] = mqttNet;
   // doc["conn"] = rtc.getEpoch();
   doc["sets"] = createSettingArray();
   doc["progs"] = createScenariosArray();
@@ -5380,16 +5521,6 @@ String prepareData()
   String result;
   serializeJson(doc, result);
   Serial.print(result);
-  return result;
-}
-
-String prepareDbInputs(bool status)
-{
-  StaticJsonDocument<512> doc;
-
-  doc["status"] = status;
-  String result;
-  serializeJson(doc, result);
   return result;
 }
 
@@ -5497,6 +5628,7 @@ String prepareDbData(String event)
   doc["mac"] = mac;
   doc["event"] = event;
   doc["status"] = "ONLINE";
+  doc["net"] = mqttNet;
   // doc["conn"] = rtc.getEpoch();
   doc["sets"] = createSettingArray();
   doc["tims"] = createTimersArray();
@@ -5513,6 +5645,42 @@ String prepareDbData(String event)
   for (uint8_t i = 0; i < totalTemps; i++)
   {
     temps[i] = sensors.getTempCByIndex(i);
+    array1.add(temps[i]);
+  }
+  JsonArray array2 = doc.createNestedArray("ain");
+
+  for (uint8_t i = 0; i < totalAnalogs; i++)
+  {
+    array2.add(analogInputs[i].voltage);
+  }
+
+  String result;
+  serializeJson(doc, result);
+  Serial.println(result);
+
+  return result;
+}
+
+String prepareDbLog(String event)
+{
+
+  StaticJsonDocument<512> doc;
+
+  doc["op"] = op;
+  doc["sig"] = String(signalQuality);
+
+  doc["mac"] = mac;
+  doc["event"] = event;
+  doc["status"] = "ONLINE";
+  doc["net"] = mqttNet;
+
+  doc["oSt"] = createOutArray();
+  doc["iSt"] = createInArray();
+  doc["pwm"] = createPwmArray();
+
+  JsonArray array1 = doc.createNestedArray("temps");
+  for (uint8_t i = 0; i < totalTemps; i++)
+  {
     array1.add(temps[i]);
   }
   JsonArray array2 = doc.createNestedArray("ain");
@@ -5618,8 +5786,6 @@ String prepareSMSStats()
   Serial.println(text);
 }
 
-
-
 void checkUpdate(String firmwareUrl)
 {
   WiFiClient client;
@@ -5719,4 +5885,3 @@ void stringToArray(String str, int arr[])
     arr[index] = str.substring(start).toInt();
   }
 }
-
