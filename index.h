@@ -933,7 +933,7 @@ const char index_html[] PROGMEM = R"rawliteral(
             //update network value
             document.getElementById("gsm").innerText = data["nt"] == "mci" ? "IR-MCI" : data["nt"] == "irancell" ? "Irancell" : "بدون سیم";
             createSignal(data["sig"]);
-            document.getElementById("status").innerText = data["status"] == "ONLINE" ? "آنلاین" : "افلاین";
+            document.getElementById("status").innerText = data["net"] == 0 ? "آفلاین" :  data["net"] == 1 ? "WIFI" : "GPRS";
             if (data['date']) {
                 var d = new Date(data["date"] * 1000);
                 d = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')} - ${d.getFullYear()}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
@@ -969,7 +969,7 @@ const char index_html[] PROGMEM = R"rawliteral(
                 document.getElementById("gsm").innerText = data["nt"] == "mci" ? "IR-MCI" : data["nt"] == "irancell" ? "Irancell" : "بدون سیم";
             }
             if (data["status"]) {
-                document.getElementById("status").innerText = data["status"] == "ONLINE" ? "انلاین" : "افلاین";
+                document.getElementById("status").innerText = data["net"] == "ONLINE" ? "آفلاین" :  data["net"] == 1 ? "WIFI" : "GPRS";
             }
             if (data['date']) {
                 var d = new Date(data["date"] * 1000);
