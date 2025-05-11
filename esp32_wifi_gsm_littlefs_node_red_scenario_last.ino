@@ -12,7 +12,10 @@ const short VERSION = 2;
 #include <ESPmDNS.h>
 #include <TinyGsmClient.h>
 #include <WiFiClientSecure.h>
+#include <EmonLib.h> // کتابخانه اندازه‌گیری جریان
+
 #define SerialAT Serial2
+#define TINY_GSM_DEBUG Serial
 
 const char mci_apn[] = "mcinet";
 const char irancell_apn[] = "mtnirancell ";
@@ -86,6 +89,16 @@ DallasTemperature sensors(&oneWire);
 #include <RCSwitch.h>
 RCSwitch mySwitch = RCSwitch();
 
+// MMMMMMMMMMMMMMMMMMMMMMMMMMM ENERGY MONITOR
+
+EnergyMonitor emon;
+
+const int ctPin = 33;              // پین متصل به سنسور CT
+const double assumedVoltage = 220; // ولتاژ فرضی برای محاسبه توان
+
+unsigned long lastSampleTime = 0;
+unsigned long sampleInterval = 15000; // ثانیه نمونه‌برداری
+
 // MMMMMMMMMMMMMMMMMMMMMMMMMMM AES
 // MMMMMMMMMMMMMMMMMMMMMMMMMMM BLE
 const char *ssid_ap = "RELEX-";
@@ -127,7 +140,7 @@ uint8_t wifiTryCount = 0;
 
 char *TCI_CHARGE = "AT+CUSD=1,\"*140*11#\"";
 char *IRANCEL_CHARGE = "AT+CUSD=1,\"*140*121#\"";
-char *RIGHTEL_CHARGE = "AT+CUSD=1,\"*140*121#\"";
+char *RIGHTEL_CHARGE = "AT+CUSD=1,\"*141*1#\"";
 
 struct Task
 {
@@ -217,6 +230,8 @@ output pwms[totalPwm] = {
     {"pwm2", "pS2", 18, 1, "", "", 0}};
 
 analog temps[totalTemps] = {};
+uint8_t lastTempShown = 0;
+
 analog currentAmp = {0.0, 0.0, {}};
 
 const char *offsetPhone[totalPhoneNo] = {"p1", "p2", "p3", "p4", "p5"}; // 13
@@ -224,6 +239,8 @@ const char *offsetPhone[totalPhoneNo] = {"p1", "p2", "p3", "p4", "p5"}; // 13
 const char *offsetStates = "states"; // 4
 
 uint minCounter = 0;
+uint8_t gsmCounter = 0;
+
 String tempLabel = "";
 String tempPhone = "";
 String tempSch = "";
@@ -247,6 +264,8 @@ uint8_t THRESHOLD_BIAS = 204;
 unsigned long prevCallTime = 0;
 unsigned long prevTaskTime = 0;
 unsigned long prevRfTime = 0;
+
+static const unsigned char PROGMEM image_Icon_Wifi_bits[] = {0x1e, 0x00, 0x7f, 0x80, 0xc0, 0xc0, 0x9e, 0x40, 0x3f, 0x00, 0x21, 0x00, 0x0c, 0x00, 0x0c, 0x00};
 
 // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 //  Create AsyncWebServer object on port 80
@@ -286,7 +305,7 @@ ESP32Time rtc(0); // offset in seconds GMT+1
 // #define SENSOR_3 21
 // #define SENSOR_4 22
 
-#define BUTTON_PIN 33
+#define BUTTON_PIN 14
 #include <Bounce2.h>
 Bounce2::Button button = Bounce2::Button();
 
@@ -313,7 +332,8 @@ boolean smsIsReady = false;
 boolean DEBUG_MODE = 1;
 
 /// setting variables
-bool hasGSM = false;
+bool simInserted = false;
+bool gsmNetwork = false;
 bool hasWifi = false;
 bool forceUseGprs = false;
 bool gprsConnected = false;
@@ -533,8 +553,8 @@ void callback(char *topic, byte *payload, unsigned int length)
     String outPrg = outputIsBusy(out);
     if (outPrg != "")
     {
-      String text = "رله " + String(out + 1) + " قفل و در حالت ";
-      text = text + ((outPrg.charAt(0) == 's') ? "دزدگیر قرار دارد" : "پمپ قرار دارد");
+      String text = "رله " + String(out + 1) + " در حالت سناریو قرار دارد ";
+      // text = text + ((outPrg.charAt(0) == 's') ? "دزدگیر قرار دارد" : "پمپ قرار دارد");
       Serial.println(text);
       return;
     }
@@ -712,7 +732,7 @@ void reconnect()
 {
   if (mqtt_count > 6)
   {
-    hasGSM = false;
+    gsmNetwork = false;
     hasWifi = false;
     return;
   }
@@ -1090,10 +1110,6 @@ void setupLCD()
   display.clearDisplay();
 }
 
-void welcomeDisplay()
-{
-}
-
 void initDisplay()
 {
 
@@ -1102,18 +1118,17 @@ void initDisplay()
   // display.setCursor(2, 14);
   // display.println("GSM");
 
-  display.clearDisplay();
-
   display.setCursor(2, 24);
-  display.print("TEMP");
-  display.setCursor(2, 34);
-  display.println("WIFI");
-
-  display.setCursor(2, 44);
   display.println("NET");
 
-  display.setCursor(2, 54);
-  display.println("OUTPUTS");
+  display.setCursor(2, 34);
+  display.print("TEMP 1");
+
+  display.setCursor(2, 44);
+  display.println("ENERGY");
+  // display.setCursor(2, 54);
+  // display.println("OUTPUTS");
+  updateStatesDSP();
   display.display();
 }
 
@@ -1138,7 +1153,7 @@ void updateDisplay()
   display.setCursor(2, 14);
   if (op == "")
   {
-    display.println("GSM");
+    display.println("No GSM");
   }
   else if (op == "mci")
   {
@@ -1148,17 +1163,24 @@ void updateDisplay()
   {
     display.println("IRANCELL");
   }
+  else if (op == "rightel")
+  {
+    display.println("RIGHTEL");
+  }
 
-  display.fillRect(80, 24, 48, 7, 0);
+  display.fillRect(80, 34, 48, 7, 0);
 
+  display.drawCircle(118, 34, 1, 1);
   String tmp = String(temps[0].value);
-  display.setCursor(128 - ((tmp.length() + 2) * 6), 24);
+  display.setCursor(128 - ((tmp.length() + 2) * 6), 34);
+
   display.print(tmp + " C");
-  display.fillRect(110, 12, 34, 7, 0);
+
+  display.fillRect(100, 12, 34, 7, 0);
 
   if (signalQuality <= 0 || signalQuality == 99)
   {
-    display.setCursor(122, 14);
+    display.setCursor(108, 14);
     display.println("x");
     // display.drawRect(114, 16, 3, 4, 1);
     // display.drawRect(118, 14, 3, 6, 1);
@@ -1166,71 +1188,88 @@ void updateDisplay()
   }
   else if (signalQuality > 0 && signalQuality <= 7)
   {
-    display.fillRect(110, 18, 3, 2, 1);
-    display.drawRect(114, 16, 3, 4, 1);
-    display.drawRect(118, 14, 3, 6, 1);
-    display.drawRect(122, 12, 3, 8, 1);
+    display.fillRect(100, 18, 3, 2, 1);
+    display.drawRect(104, 16, 3, 4, 1);
+    display.drawRect(108, 14, 3, 6, 1);
+    display.drawRect(112, 12, 3, 8, 1);
   }
   else if (signalQuality > 7 && signalQuality <= 14)
   {
-    display.fillRect(110, 18, 3, 2, 1);
-    display.fillRect(114, 16, 3, 4, 1);
-    display.drawRect(118, 14, 3, 6, 1);
-    display.drawRect(122, 12, 3, 8, 1);
+    display.fillRect(100, 18, 3, 2, 1);
+    display.fillRect(104, 16, 3, 4, 1);
+    display.drawRect(108, 14, 3, 6, 1);
+    display.drawRect(112, 12, 3, 8, 1);
   }
   else if (signalQuality > 14 && signalQuality <= 21)
   {
-    display.fillRect(110, 18, 3, 2, 1);
-    display.fillRect(114, 16, 3, 4, 1);
-    display.fillRect(118, 14, 3, 6, 1);
-    display.drawRect(122, 12, 3, 8, 1);
+    display.fillRect(100, 18, 3, 2, 1);
+    display.fillRect(104, 16, 3, 4, 1);
+    display.fillRect(108, 14, 3, 6, 1);
+    display.drawRect(112, 12, 3, 8, 1);
   }
   else
   {
-    display.fillRect(110, 18, 3, 2, 1);
-    display.fillRect(114, 16, 3, 4, 1);
-    display.fillRect(118, 14, 3, 6, 1);
-    display.fillRect(122, 12, 3, 8, 1);
+    display.fillRect(100, 18, 3, 2, 1);
+    display.fillRect(104, 16, 3, 4, 1);
+    display.fillRect(108, 14, 3, 6, 1);
+    display.fillRect(112, 12, 3, 8, 1);
   }
-  display.fillRect(74, 34, 34, 7, 0);
+  display.fillRect(74, 12, 10, 7, 0);
 
   if (WiFi.status() == WL_CONNECTED)
   {
-    display.setCursor(74, 34);
-    display.println("CONNECTED");
+    // display.setCursor(74, 34);
+    display.drawBitmap(118, 12, image_Icon_Wifi_bits, 10, 8, 1);
+    // display.println("CONNECTED");
   }
   else
   {
-    display.setCursor(110, 34);
-    display.println("OFF");
+    // display.drawBitmap(118, 12, image_Icon_Wifi_bits, 10, 8, 1);
+    display.setCursor(118, 14);
+
+    display.println("x");
+    display.setTextSize(1);
+    // display.setTextColor(WHITE);
+
+
+    // display.setCursor(120, 10);
+    // display.println("/");
   }
 
-  display.fillRect(86, 44, 38, 7, 0);
+  display.fillRect(86, 24, 42, 7, 0);
 
   if (mqtt_connected)
   {
-    display.setCursor(104, 44);
+    display.setCursor(104, 24);
     display.println(mqttNet == 1 ? "WIFI" : "GPRS");
   }
   else
   {
-    display.setCursor(86, 44);
+    display.setCursor(86, 24);
     display.println("OFFLINE");
   }
+  display.fillRect(70, 44, 46, 7, 0);
 
-  if (outStates != "")
-  {
-    String outs;
-    for (uint8_t i = 0; i < totalOutputs; i++)
-    {
-      outs += outStates[(i * 2) + 1];
-    }
-    // outStates.replace(",", "");
-    display.fillRect(50, 54, 78, 7, 0);
+  String amp = String(currentAmp.buffer[0]);
+  display.setCursor(128 - ((amp.length() + 3) * 6), 44);
 
-    display.setCursor(128 - (outs.length() * 6), 54);
-    display.println(outs);
-  }
+  display.println(amp);
+  display.setCursor(122, 44);
+  display.println("W");
+
+  // if (outStates != "")
+  // {
+  //   String outs;
+  //   for (uint8_t i = 0; i < totalOutputs; i++)
+  //   {
+  //     outs += outStates[(i * 2) + 1];
+  //   }
+  //   // outStates.replace(",", "");
+  //   display.fillRect(50, 54, 78, 7, 0);
+
+  //   display.setCursor(128 - (outs.length() * 6), 54);
+  //   display.println(outs);
+  // }
   // display.setCursor(2, 54);
   // display.println("INPUTS");
   // if (inStates != "") {
@@ -1241,11 +1280,11 @@ void updateDisplay()
 }
 void updateSignalDisp()
 {
-  display.fillRect(110, 12, 34, 7, 0);
+  display.fillRect(100, 12, 16, 7, 0);
 
   if (signalQuality <= 0 || signalQuality == 99)
   {
-    display.setCursor(122, 14);
+    display.setCursor(108, 12);
     display.println("x");
     // display.drawRect(114, 16, 3, 4, 1);
     // display.drawRect(118, 14, 3, 6, 1);
@@ -1253,31 +1292,31 @@ void updateSignalDisp()
   }
   else if (signalQuality > 0 && signalQuality <= 7)
   {
-    display.fillRect(110, 18, 3, 2, 1);
-    display.drawRect(114, 16, 3, 4, 1);
-    display.drawRect(118, 14, 3, 6, 1);
-    display.drawRect(122, 12, 3, 8, 1);
+    display.fillRect(100, 18, 3, 2, 1);
+    display.drawRect(104, 16, 3, 4, 1);
+    display.drawRect(108, 14, 3, 6, 1);
+    display.drawRect(112, 12, 3, 8, 1);
   }
   else if (signalQuality > 7 && signalQuality <= 14)
   {
-    display.fillRect(110, 18, 3, 2, 1);
-    display.fillRect(114, 16, 3, 4, 1);
-    display.drawRect(118, 14, 3, 6, 1);
-    display.drawRect(122, 12, 3, 8, 1);
+    display.fillRect(100, 18, 3, 2, 1);
+    display.fillRect(104, 16, 3, 4, 1);
+    display.drawRect(108, 14, 3, 6, 1);
+    display.drawRect(112, 12, 3, 8, 1);
   }
   else if (signalQuality > 14 && signalQuality <= 21)
   {
-    display.fillRect(110, 18, 3, 2, 1);
-    display.fillRect(114, 16, 3, 4, 1);
-    display.fillRect(118, 14, 3, 6, 1);
-    display.drawRect(122, 12, 3, 8, 1);
+    display.fillRect(100, 18, 3, 2, 1);
+    display.fillRect(104, 16, 3, 4, 1);
+    display.fillRect(108, 14, 3, 6, 1);
+    display.drawRect(112, 12, 3, 8, 1);
   }
   else
   {
-    display.fillRect(110, 18, 3, 2, 1);
-    display.fillRect(114, 16, 3, 4, 1);
-    display.fillRect(118, 14, 3, 6, 1);
-    display.fillRect(122, 12, 3, 8, 1);
+    display.fillRect(100, 18, 3, 2, 1);
+    display.fillRect(104, 16, 3, 4, 1);
+    display.fillRect(108, 14, 3, 6, 1);
+    display.fillRect(112, 12, 3, 8, 1);
   }
 }
 void updateOperatorDisp()
@@ -1297,37 +1336,73 @@ void updateOperatorDisp()
   {
     display.println("IRANCELL");
   }
+  else if (op == "rightel")
+  {
+    display.println("RIGHTEL");
+  }
 }
 void updateStatesDSP()
 {
-  display.fillRect(0, 54, 128, 8, 0);
-  display.setCursor(2, 54);
-  display.println("OUTPUTS");
-  if (outStates != "")
+
+  display.fillRect(0, 53, 128, 11, 0);
+  uint8_t start = (128 - (totalOutputs * 13)) / 2;
+  for (uint8_t i = 0; i < totalOutputs; i++)
   {
-    String outs;
-    for (uint8_t i = 0; i < totalOutputs; i++)
+    int state = outStates.charAt(i * 2 + 1);
+
+    if (state == '1')
     {
-      outs += outStates[(i * 2) + 1];
+      display.fillRoundRect(start + (i * 13), 53, 11, 11, 1, 1);
+      display.setCursor((start + 3) + (i * 13), 55);
+      display.setTextColor(BLACK);
+      display.print(String(i + 1));
     }
-    display.setCursor(128 - (outs.length() * 6), 54);
-    display.println(outs);
+    else
+    {
+      display.drawRoundRect(start + (i * 13), 53, 11, 11, 1, 1);
+      display.setCursor((start + 3) + (i * 13), 55);
+      display.setTextColor(WHITE);
+      display.print(String(i + 1));
+    }
   }
+
+  // display.setCursor(2, 54);
+  // display.println("OUTPUTS");
+  // if (outStates != "")
+  // {
+  //   String outs;
+  //   for (uint8_t i = 0; i < totalOutputs; i++)
+  //   {
+  //     outs += outStates[(i * 2) + 1];
+  //   }
+  //   display.setCursor(128 - (outs.length() * 6), 54);
+  //   display.println(outs);
+  // }
 
   display.display();
 }
 void updateTempDSP()
 {
-  // display.fillRect(0, 44, 128, 8, 0);
-  display.fillRect(0, 24, 128, 8, 0);
+  if (temps[lastTempShown].value == -127.0)
+  {
+    return;
+  }
+  if (lastTempShown >= totalTemps)
+  {
+    lastTempShown = 0;
+  }
+  display.fillRect(26, 34, 102, 8, 0);
+  display.setTextColor(WHITE);
+  display.setCursor(2, 34);
+  display.print("TEMP " + String(lastTempShown + 1));
 
-  display.setCursor(2, 24);
-  display.print("TEMP");
-  String tmp = String(temps[0].value);
-  display.setCursor(128 - ((tmp.length() + 2) * 6), 24);
+  String tmp = String(temps[lastTempShown].value);
+
+  display.drawCircle(118, 34, 1, 1);
+  display.setCursor(128 - ((tmp.length() + 2) * 6), 34);
   display.print(tmp + " C");
-
   display.display();
+  lastTempShown++;
 }
 
 void loadingDisplay(int progress, String title)
@@ -1403,10 +1478,10 @@ void smsDisplay()
   // display.fillRoundRect(50, 12, 26, 17, 3, 1);
 
   // ALARM icon
-  display.drawBitmap(54, 14, image_ALARM_icon_bits, 16, 16, 1);
+  display.drawBitmap(54, 14, image_ALARM_icon_bits, 8, 8, 1);
   display.display();
 
-  addTask(clearSmsDisplay, 3000);
+  addTask(clearSmsDisplay, 1000);
 }
 
 void clearSmsDisplay()
@@ -1459,6 +1534,8 @@ void setup()
 
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
   Serial.begin(9600);
+  pinMode(RESET_GSM, OUTPUT);
+  GsmReset();
   delay(1000);
   Serial.print("Firmware Version=>");
   Serial.println(VERSION);
@@ -1466,20 +1543,22 @@ void setup()
 
   Serial.print("free Entries: ");
   Serial.println(EEPROM.freeEntries());
+
+  emon.current(ctPin, 30.0); // نسبت کالیبراسیون (تغییر بده برای دقت بهتر)
+
   // Serial.println(REMOTES.freeEntries());
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 
   Serial2.begin(9600, SERIAL_8N1, rxPin, txPin);
 
-  // Reset Pin
-  pinMode(RESET_GSM, OUTPUT);
-
-  GsmReset();
-  delay(2000);
+  // modem.init();
+  delay(3000);
   esp_task_wdt_init(100, true); // timeout = 5 ثانیه، ریست سیستم در صورت تایم‌اوت
   esp_task_wdt_add(NULL);
 
   initLittleFS();
+  // Reset Pin
+
   loadingDisplay(10, "Init Data");
 
   // first parameter is name of access point, second is the password
@@ -1540,8 +1619,6 @@ void setup()
   setupVariables();
 
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-  uint8_t gsmCounter = 0;
-
   loadingDisplay(40, "Set Wifi");
 
   if (initWiFi())
@@ -1557,20 +1634,24 @@ void setup()
   delay(1000);
   if (checkSim())
   {
-    while (!isRegistered())
-    {
-      gsmCounter = gsmCounter + 1;
-      flipper.attach(0.5, flip);
-      loadingDisplay(50 + (gsmCounter * 6), "Setup GSM");
-      delay(3000);
-      if (gsmCounter > 6)
-      {
-        GsmReset();
-        gsmCounter = 0;
-        // flipper.detach();
-        break;
-      }
-    }
+
+    loadingDisplay(55, "Setup GSM");
+
+    setupGSM();
+    // while (!isRegistered())
+    // {
+    //   gsmCounter = gsmCounter + 1;
+    //   flipper.attach(0.5, flip);
+    //   loadingDisplay(50 + (gsmCounter * 6), "Setup GSM");
+    //   delay(3000);
+    //   if (gsmCounter > 6)
+    //   {
+    //     GsmSoftReset();
+    //     gsmCounter = 0;
+    //     // flipper.detach();
+    //     break;
+    //   }
+    // }
   }
   else
   {
@@ -1581,10 +1662,10 @@ void setup()
 
   delay(500);
 
-  if (hasGSM)
-  {
-    setupGSM();
-  }
+  // if (gsmNetwork)
+  // {
+  //   setupGSM();
+  // }
 
   // Initialize Ticker every 0.5s
   //  gsmTicker.attach(3600, getGsmDateTime);  //Use attach_ms if you need time in ms
@@ -1602,10 +1683,30 @@ void setup()
 
     delay(100);
   }
+
   initDisplay();
 
   checkTasks();
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+}
+
+void checkSimNetwork()
+{
+
+  while (!isRegistered())
+  {
+    gsmCounter = gsmCounter + 1;
+    flipper.attach(0.5, flip);
+    loadingDisplay(50 + (gsmCounter * 6), "Setup GSM");
+    delay(3000);
+    if (gsmCounter > 6)
+    {
+      GsmSoftReset();
+      gsmCounter = 0;
+      // flipper.detach();
+      break;
+    }
+  }
 }
 
 /*******************************************************************************
@@ -1613,9 +1714,9 @@ void setup()
  ******************************************************************************/
 
 unsigned long prevTemp = 0;
+
 void loop()
 {
-  esp_task_wdt_reset();
 
   now = millis();
 
@@ -1632,8 +1733,11 @@ void loop()
     checkTasks();
     prevTaskTime = now;
   }
+  esp_task_wdt_reset();
 
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+  getEnergyCons();
 
   checkSensors();
 
@@ -1648,8 +1752,9 @@ void loop()
     sensors.requestTemperatures();
     for (uint8_t i = 0; i < totalTemps; i++)
     {
-      float t = sensors.getTempCByIndex(i);
+      temps[i].value = sensors.getTempCByIndex(i);
     }
+    updateTempDSP();
     prevTemp = now;
   }
   runScenarios();
@@ -1663,16 +1768,32 @@ void loop()
   checkMqttStatus();
 }
 
+void getEnergyCons()
+{
+  if (now - lastSampleTime >= sampleInterval)
+  {
+    lastSampleTime = now;
+
+    // اندازه‌گیری جریان RMS
+    double Irms = emon.calcIrms(1480);
+    double power = Irms * assumedVoltage; // توان ظاهری
+    double energyWh = (power * (sampleInterval / 1000.0)) / 3600.0;
+
+    currentAmp.value += energyWh;
+    currentAmp.buffer[0] = energyWh;
+    Serial.println("energyWh: ");
+    Serial.println(currentAmp.value);
+  }
+}
 void processTasks()
 {
-  unsigned long currentTime = millis();
 
   for (int i = 0; i < taskCount; i++)
   {
-    if (currentTime >= taskQueue[i].executeAt)
+
+    if (now >= taskQueue[i].executeAt)
     {
       taskQueue[i].function(); // اجرای تسک
-
       // حذف تسک اجرا شده از صف (جابجایی تسک‌های بعدی)
       for (int j = i; j < taskCount - 1; j++)
       {
@@ -3275,11 +3396,12 @@ void compareRemote(String received)
 void initSim800Mqtt()
 {
   // Connect to GPRS
-  Serial.println("Connecting to GPRS...");
 
   Serial.println(mqtt_connected);
   if (mqtt_connected)
   {
+    Serial.println("Already Connected to Mqtt");
+
     return;
   }
 
@@ -3304,6 +3426,28 @@ void initSim800Mqtt()
 
 void setupGSM()
 {
+  Serial.print("Waiting for network...");
+
+  esp_task_wdt_reset();
+  if (!modem.waitForNetwork(30000L, false))
+  {
+    Serial.println("gsm network fail");
+    gsmNetwork = false;
+    addTask(setupGSM, 60000);
+  }
+  else
+  {
+    Serial.println(" success");
+    if (modem.isNetworkConnected())
+    {
+      gsmNetwork = true;
+      Serial.println("Network connected");
+      initSms();
+    }
+  }
+}
+void initSms()
+{
 
   // delay(3000);
 
@@ -3316,54 +3460,6 @@ void setupGSM()
   getGsmDateTime();
 
   initSim800Mqtt();
-}
-
-void manageMqttConnection()
-{
-  // ابتدا تلاش برای اتصال به وای‌فای
-  if (!ssid.isEmpty() && !password.isEmpty())
-  {
-    if (initWiFi())
-    {
-      // اگر وای‌فای متصل شد، MQTT را روی وای‌فای ست کن
-      activeClient = &wifiClient;
-      mqtt.setClient(*activeClient);
-      mqtt.setServer(m_server.c_str(), port);
-      mqtt.setCallback(callback);
-      mqttNet = WIFI;
-      Serial.println(F("MQTT over WiFi"));
-      return;
-    }
-  }
-
-  // اگر وای‌فای نبود یا متصل نشد، تلاش برای اتصال GPRS
-  if (checkSim())
-  {
-    if (!gprsConnected)
-    {
-      if (!modem.gprsConnect(op == "irancell" ? irancell_apn : mci_apn))
-      {
-        Serial.println(F("Failed to connect to GPRS"));
-        mqttNet = OFF;
-        return;
-      }
-      gprsConnected = true;
-    }
-    if (modem.isGprsConnected())
-    {
-      activeClient = &gsmClient;
-      mqtt.setClient(*activeClient);
-      mqtt.setServer(m_server.c_str(), port);
-      mqtt.setCallback(callback);
-      mqttNet = GPRS;
-      Serial.println(F("MQTT over GPRS"));
-      return;
-    }
-  }
-
-  // اگر هیچکدام نبود، MQTT غیرفعال است
-  mqttNet = OFF;
-  Serial.println(F("MQTT not available"));
 }
 
 void checkMqttStatus()
@@ -3415,19 +3511,21 @@ bool checkSim()
 {
   SimStatus result = modem.getSimStatus();
   Serial.println(SimStatus(result));
-  // String result = SendShortCommand("AT+CPIN?");
-  // String result = SendShortCommand("AT+CCID");
-  // if (result.indexOf("+CPIN") != -1 && result.indexOf("READY") != -1) {
-  if (result != SIM_ERROR)
+  if (result == 1)
   {
-    // Serial.println(result);
-    hasGSM = true;
+    simInserted = true;
+    Serial.println("SIM is Ready");
     return true;
   }
-  else
+  else if (result == 2)
   {
-
-    hasGSM = false;
+    Serial.println("SIM is locked");
+    simInserted = false;
+    return false;
+  }
+  else if (result != 1)
+  {
+    simInserted = false;
     return false;
   }
 }
@@ -3445,9 +3543,13 @@ void getOperator(bool report)
   {
     newValue = "mci";
   }
+  else if (result.indexOf("43220") != -1 || result.indexOf("43221") != -1)
+  {
+    newValue = "rightel";
+  }
   else
   {
-    newValue = "-";
+    newValue = "";
   }
   if (report && newValue != op)
   {
@@ -3479,7 +3581,6 @@ void getSignalQuality(bool report)
 {
   uint8_t s;
   s = modem.getSignalQuality();
-
   if (report && abs(s - signalQuality) > signal_threshold)
   {
     StaticJsonDocument<64> doc;
@@ -3511,8 +3612,15 @@ void blinkLed()
   delay(100);
   // digitalWrite(BUILTIN_LED, LOW);
 }
+
+void GsmSoftReset()
+{
+  modem.restart();
+}
+
 void GsmReset()
 {
+
   Serial.println("gsm reset");
   digitalWrite(RESET_GSM, LOW);
   delay(300);
@@ -4029,8 +4137,10 @@ void readSerial()
 
 bool isRegistered()
 {
-  return modem.isNetworkConnected();
-
+  gsmNetwork = modem.isNetworkConnected();
+  Serial.println("isRegistered :");
+  Serial.println(gsmNetwork);
+  return gsmNetwork;
   // String result = SendShortCommand("AT+CREG?", "");
   // (result.indexOf(F("+CREG: 0,2"))) != -1 ||
   // if ((result.indexOf(F("+CREG: 0,1"))) != -1 || (result.indexOf(F("+CREG: 0,5"))) != -1 || (result.indexOf(F("+CREG: 1,1"))) != -1 || (result.indexOf(F("+CREG: 1,5"))) != -1)
@@ -4221,10 +4331,11 @@ void checkTasks()
   // count minutes
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
   //  one hour
-  if (minCounter > 60)
+  if (minCounter >= 60)
   {
     minCounter = 0;
     createMovingAverage();
+    checkSim();
   }
 
   if (minCounter > 0 && minCounter % 10 == 0)
@@ -4252,21 +4363,21 @@ void checkTasks()
     {
       initWiFi();
     }
-    if (hasGSM)
+    if (simInserted)
     {
-      checkSmsHistory();
       if (op == "" || signalQuality == 0 || signalQuality == 99)
       {
-        while (!isRegistered() && gsmCounter < 3)
-        {
-          GsmReset();
-          flipper.attach(0.5, flip);
-          gsmCounter++;
-        }
+        setupGSM();
       }
-      else
+
+      /// clear sms storage
+      checkSmsHistory();
+    }
+    else
+    {
+      if (checkSim())
       {
-        checkSim();
+        setupGSM();
       }
     }
   }
@@ -4282,7 +4393,7 @@ void checkTasks()
   {
     /// if has borker registered
 
-    if (hasGSM)
+    if (gsmNetwork)
     {
       getSignalQuality(mqtt_connected);
       if (op == "")
@@ -4291,13 +4402,14 @@ void checkTasks()
       }
       if (signalQuality == 0 || signalQuality == 99)
       {
-        GsmReset();
+        GsmSoftReset();
       }
     }
     else
     {
       checkSim();
     }
+
     if (hasWifi && !mqtt_connected)
     {
       reconnect();
@@ -4306,6 +4418,7 @@ void checkTasks()
     {
       reconnect();
     }
+
     if (deviceYear < 20 || deviceYear > 70)
     {
 
@@ -4313,7 +4426,7 @@ void checkTasks()
       {
         printLocalTime();
       }
-      else if (hasGSM)
+      else if (gsmNetwork)
       {
         getGsmDateTime();
       }
@@ -4339,7 +4452,6 @@ void checkTasks()
   /// send mqtt if threshold temp trigged
   if (flag)
   {
-    updateTempDSP();
     if (mqtt_connected)
     {
       DynamicJsonDocument doc(64);
@@ -4595,7 +4707,7 @@ void setAverageElement()
     temps[i].buffer[(minCounter / 10) - 1] = temps[i].value;
   }
   /// Current Average
-  currentAmp.buffer[(minCounter / 10) - 1] = currentAmp.value;
+  // currentAmp.buffer[(minCounter / 10) - 1] = currentAmp.value;
 }
 
 void createMovingAverage()
@@ -4631,19 +4743,23 @@ void createMovingAverage()
   }
   /// Current Average
 
-  float avg = 0;
-  for (int j = 0; j < WINDOW_SIZE; j++)
-  {
-    avg += currentAmp.buffer[j];
-  }
-  avg /= WINDOW_SIZE;
+  // float avg = 0;
+  // for (int j = 0; j < WINDOW_SIZE; j++)
+  // {
+  //   avg += currentAmp.buffer[j];
+  // }
+  // avg /= WINDOW_SIZE;
 
-  currentAmp.avg = (int)avg;
+  // currentAmp.avg = (int)avg;
+
   Serial.println("current avg :");
-  Serial.println(avg);
+  Serial.println(currentAmp.value);
+  // reset energy consume
+  currentAmp.value = 0.0;
 
   if (mqtt_connected)
   {
+
     String report = prepareDbLog("log");
     publishReport(report.c_str());
   }
@@ -4796,8 +4912,9 @@ void doAction(String phoneNumber)
     if (!outPrg.isEmpty())
     {
       clearSmsVariables();
-      String text = "رله " + String(out + 1) + " قفل و در حالت ";
-      text = text + ((outPrg.charAt(0) == 's') ? "دزدگیر قرار دارد" : "پمپ قرار دارد");
+      String text = "رله " + String(out + 1) + " در حالت سناریو قرار دارد ";
+      // String text = "رله " + String(out + 1) + " قفل و در حالت ";
+      // text = text + ((outPrg.charAt(0) == 's') ? "دزدگیر قرار دارد" : "پمپ قرار دارد");
       ReplyHex(text, phoneNumber);
       return;
     }
@@ -4974,8 +5091,9 @@ void doAction(String phoneNumber)
     String outPrg = outputIsBusy(index);
     if (!outPrg.isEmpty())
     {
-      String text = "رله " + String(index + 1) + " قفل و در حالت ";
-      text = text + ((outPrg.charAt(0) == 's') ? "دزدگیر قرار دارد" : "پمپ قرار دارد");
+      String text = "رله " + String(index + 1) + " در حالت سناریو قرار دارد ";
+      // String text = "رله " + String(index + 1) + " قفل و در حالت ";
+      // text = text + ((outPrg.charAt(0) == 's') ? "دزدگیر قرار دارد" : "پمپ قرار دارد");
       ReplyHex(text, phoneNumber);
       return;
     }
@@ -5095,12 +5213,6 @@ void doAction(String phoneNumber)
       temps[i].value = sensors.getTempCByIndex(i);
       text = text + String(temps[i].value) + "ºC" + "\r\n";
     }
-    // temp0 = sensors.getTempCByIndex(0);
-    // temp1 = sensors.getTempCByIndex(1);
-    // temp2 = sensors.getTempCByIndex(2);
-    // text = text + String(temp0) + "ºC" + "\r\n";
-    // text = text + String(temp1) + "ºC" + "\r\n";
-    // text = text + String(temp2) + "ºC" + "\r\n";
     ReplyHex(text, phoneNumber);
     debugPrint(msg);
   }
@@ -5156,6 +5268,10 @@ void doAction(String phoneNumber)
     else if (op == "irancell")
     {
       Serial2.println(IRANCEL_CHARGE);
+    }
+    else if (op == "rightel")
+    {
+      Serial2.println(RIGHTEL_CHARGE);
     }
   }
 
@@ -5240,14 +5356,26 @@ void clearSmsVariables()
 
 String outputIsBusy(uint8_t index)
 {
-  // for (uint8_t i = 0; i < totalOutputs; i++) {
-  //   if (inputs[i].out == index) {
-  //     return inputs[i].value;
-  //   }
-  // }
-  // if (outputs[index].timer != "") {
-  //   return outputs[index].timer;
-  // }
+for (int i = 0; i < totalScenarios; i++)
+  {
+    Scenario scenario = scenarios[i];
+    if (scenario.value.isEmpty() || scenario.value.charAt(0) != 'o')
+      continue;
+    uint8_t target = 100;
+    if (index == scenario.input)
+    {
+      target = scenario.outPin;
+    }
+    else if (index == scenario.outPin)
+    {
+      target = scenario.input;
+    }
+
+    if (target != 100)
+    {
+     return scenario.value;
+    }
+  }
   return "";
 }
 
@@ -5500,7 +5628,8 @@ String createSettingArray()
   result += securityMode ? '1' : '0';
   result += notifyScenarios ? '1' : '0';
   result += hasWifi ? '1' : '0';
-  result += hasGSM ? '1' : '0';
+  result += simInserted ? '1' : '0';
+  result += gsmNetwork ? '1' : '0';
   result += forceUseGprs ? '1' : '0';
   return result;
 }
@@ -5648,21 +5777,16 @@ String createChainsArray()
 
 String prepareDbData(String event)
 {
-
   StaticJsonDocument<512> doc;
-
   doc["op"] = op;
   doc["sig"] = String(signalQuality);
-
   doc["mac"] = mac;
   doc["event"] = event;
   // doc["status"] = "ONLINE";
   doc["net"] = mqttNet;
-  // doc["conn"] = rtc.getEpoch();
   doc["sets"] = createSettingArray();
   doc["tims"] = createTimersArray();
   doc["progs"] = createScenariosArray();
-  // doc["chain"] = createChainsArray();
 
   doc["oSt"] = createOutArray();
   doc["iSt"] = createInArray();
@@ -5705,7 +5829,7 @@ String prepareDbLog(String event)
   doc["oSt"] = createOutArray();
   doc["iSt"] = createInArray();
   doc["pwm"] = createPwmArray();
-  doc["curr"] = currentAmp.avg;
+  doc["amp"] = (int)currentAmp.value;
 
   JsonArray array1 = doc.createNestedArray("temps");
   for (uint8_t i = 0; i < totalTemps; i++)
@@ -5880,38 +6004,4 @@ void update_progress(int cur, int total)
   Serial.printf("CALLBACK:  HTTP update process at %d of %d bytes...\n", cur, total);
   int p = (cur * 100) / total;
   loadingDisplay(cur, "Updating");
-}
-// Function to convert an array to a string
-String arrayToString(int arr[])
-{
-  String result = "";
-  for (int i = 0; i < totalOutputs; i++)
-  {
-    result += String(arr[i]);
-    if (i < totalOutputs - 1)
-    {
-      result += ","; // Add a delimiter (comma)
-    }
-  }
-  return result;
-}
-
-// Function to convert a string back to an array
-void stringToArray(String str, int arr[])
-{
-  int index = 0;
-  int start = 0;
-  int end = str.indexOf(',');
-
-  while (end != -1 && index < totalOutputs)
-  {
-    arr[index++] = str.substring(start, end).toInt(); // Extract and convert to int
-    start = end + 1;
-    end = str.indexOf(',', start);
-  }
-  // Handle the last element
-  if (index < totalOutputs)
-  {
-    arr[index] = str.substring(start).toInt();
-  }
 }
