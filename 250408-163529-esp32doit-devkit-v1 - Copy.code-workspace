@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"name": "scanner_i2c",
+			"path": "../../scanner_i2c"
+		},
+		{
+			"name": "250429-133935-esp32doit-devkit-v1",
+			"path": "../../250429-133935-esp32doit-devkit-v1"
+		},
+		{
+			"name": "250412-114528-esp32doit-devkit-v1",
+			"path": "../../250412-114528-esp32doit-devkit-v1"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"new": "cpp",
+			"*.tpp": "cpp",
+			"string_view": "cpp",
+			"regex": "cpp",
+			"functional": "cpp",
+			"cmath": "cpp"
+		}
+	}
+}

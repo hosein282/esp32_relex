@@ -1,8 +1,11 @@
+# 1 "C:\\Users\\Amin\\AppData\\Local\\Temp\\tmphoi_glxt"
+#include <Arduino.h>
+# 1 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 #include <LittleFS.h>
 #include "base64.hpp"
-// #include <stdint.h>
-// #include <iostream>
-#define TINY_GSM_MODEM_SIM800 // Define the modem type
+
+
+#define TINY_GSM_MODEM_SIM800 
 
 #define DEVICE_MODEL "G84-TR"
 
@@ -12,7 +15,7 @@ const short VERSION = 2;
 #include <ESPmDNS.h>
 #include <TinyGsmClient.h>
 #include <WiFiClientSecure.h>
-#include <EmonLib.h> // کتابخانه اندازه‌گیری جریان
+#include <EmonLib.h>
 
 #define SerialAT Serial2
 #define TINY_GSM_DEBUG Serial
@@ -24,87 +27,87 @@ const char gprsUser[] = "";
 const char gprsPass[] = "";
 
 TinyGsm modem(SerialAT);
-// TinyGsmClient client(modem);
+
 
 #include "hex.h"
 #include <ESPAsyncWebServer.h>
-// #include <AsyncEventSource.h>
+
 #include <HTTPUpdate.h>
 #include "index.h"
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 #include <ArduinoJson.h>
 #include <HardwareSerial.h>
 #include <esp_task_wdt.h>
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
 
-// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
-#define OLED_RESET -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+
+#define OLED_RESET -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-// #include <EEPROM.h>
+
 #include <Preferences.h>
 Preferences EEPROM;
-// Preferences REMOTES;
 
-#include <Ticker.h> //Ticker Library
+
+#include <Ticker.h>
 #include <ESP32Time.h>
 
 #include <PubSubClient.h>
 
 const char *mqtt_server = "broker.emqx.io";
 
-// #include <ArduinoOTA.h>
+
 
 WiFiClient wifiClient;
-// PubSubClient mqtt(wifiClient);
+
 TinyGsmClient gsmClient(modem);
 
-Client *activeClient = nullptr; // Pointer to the active client
+Client *activeClient = nullptr;
 PubSubClient mqtt;
 uint port = 1883;
 
-// PubSubClient gssm(client);
+
 
 #include "time.h"
 #include <Adafruit_MCP23X17.h>
 Adafruit_MCP23X17 mcp;
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMM Temprature ds18b20
+
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-// GPIO where the DS18B20 is connected to
+
 const uint8_t oneWireBus = 34;
-// Setup a oneWire instance to communicate with any OneWire devices
+
 OneWire oneWire(oneWireBus);
 
-// Pass our oneWire reference to Dallas Temperature sensor
+
 DallasTemperature sensors(&oneWire);
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMM 433MHZ receiver
+
 #include <RCSwitch.h>
 RCSwitch mySwitch = RCSwitch();
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMM ENERGY MONITOR
+
 
 EnergyMonitor emon;
 
-const int ctPin = 33;              // پین متصل به سنسور CT
-const double assumedVoltage = 220; // ولتاژ فرضی برای محاسبه توان
+const int ctPin = 33;
+const double assumedVoltage = 220;
 
 unsigned long lastSampleTime = 0;
-unsigned long sampleInterval = 15000; // ثانیه نمونه‌برداری
+unsigned long sampleInterval = 15000;
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMM AES
-// MMMMMMMMMMMMMMMMMMMMMMMMMMM BLE
+
+
 const char *ssid_ap = "VIIO-";
 String ssid = "";
 String password = "";
@@ -113,13 +116,13 @@ String m_server = "5.238.178.210";
 String sub_topic = "action";
 String pub_topic = "report";
 
-// File paths to save input values permanently
+
 const char *wifi_ssid = "/ssid.txt";
 const char *wifi_pass = "/password.txt";
 const char *m_server_k = "/server.txt";
 const char *mac_f = "/mac.txt";
 
-// sender phone number with country code
+
 const uint8_t totalPhoneNo = 5;
 const uint8_t totalPwm = 1;
 const uint8_t totalOutputs = 8;
@@ -127,7 +130,7 @@ const uint8_t totalInputs = 8;
 const uint8_t totalRemotes = 48;
 const uint8_t totalTemps = 3;
 const uint8_t totalAnalogs = 2;
-const uint8_t totalScenarios = 16; // حداکثر تعداد سناریوها
+const uint8_t totalScenarios = 16;
 
 enum MQTT_NET
 {
@@ -140,7 +143,7 @@ MQTT_NET mqttNet = OFF;
 uint8_t signalQuality = 0;
 uint8_t wifiTryCount = 0;
 
-// float temps[3] = {0.5, 0.0, 0.0};
+
 
 char *TCI_CHARGE = "AT+CUSD=1,\"*140*11#\"";
 char *IRANCEL_CHARGE = "AT+CUSD=1,\"*140*121#\"";
@@ -148,8 +151,8 @@ char *RIGHTEL_CHARGE = "AT+CUSD=1,\"*141*1#\"";
 
 struct Task
 {
-  unsigned long executeAt; // زمان اجرای تسک (بر اساس millis())
-  void (*function)();      // تابعی که باید اجرا شود
+  unsigned long executeAt;
+  void (*function)();
 };
 
 #define MAX_TASKS 10
@@ -174,11 +177,11 @@ struct output
   String label;
   String timer;
   uint8_t pwm;
-  uint8_t type; // ب2 برای لحظه ای ، 1 برای 3 ثانیه و 0 برای لچ
+  uint8_t type;
   unsigned long now;
   uint16_t time;
   boolean locked;
-  // int chain[totalOutputs];
+
 };
 
 struct Scenario
@@ -186,12 +189,12 @@ struct Scenario
   char key[4];
   String value;
   int8_t input;
-  String condition; // نوع شرط: ">", "<", "=="
-  float threshold;  // مقدار آستانه
-  int8_t outPin;    // پین خروجی
-  int8_t outState;  // حالت خروجی: HIGH یا LOW
-  uint8_t swType;   // ب2 برای لحظه ای ، 1 برای 3 ثانیه و 0 برای لچ
-  uint8_t notif;    // 0 for off, 1 > sms , 2 >call
+  String condition;
+  float threshold;
+  int8_t outPin;
+  int8_t outState;
+  uint8_t swType;
+  uint8_t notif;
   unsigned long lastNotif;
 };
 struct Input
@@ -207,7 +210,7 @@ struct Input
   float buffer[WINDOW_SIZE];
 };
 
-int scenariosCount = 0; //  تعداد سناریوها
+int scenariosCount = 0;
 
 Scenario scenarios[totalScenarios] = {};
 
@@ -243,7 +246,7 @@ output outputs[totalOutputs] = {
 
 output pwms[totalPwm] = {
     {"pwm1", "pS1", 26, 1, "", "", 0},
-    // {"pwm2", "pS2", 18, 1, "", "", 0},
+
 };
 
 analog temps[totalTemps] = {};
@@ -251,9 +254,9 @@ uint8_t lastTempShown = 0;
 
 analog currentAmp = {0, 0.0, {}, true};
 
-const char *offsetPhone[totalPhoneNo] = {"p1", "p2", "p3", "p4", "p5"}; // 13
+const char *offsetPhone[totalPhoneNo] = {"p1", "p2", "p3", "p4", "p5"};
 
-const char *offsetStates = "states"; // 4
+const char *offsetStates = "states";
 
 uint minCounter = 0;
 uint8_t gsmCounter = 0;
@@ -270,9 +273,9 @@ String buffer;
 #define MQTT_MAX_PACKET_SIZE 1024
 #define SCH_TASK_TIME 60000
 unsigned int aResolution = 4095;
-const int freq = 3000; // 3610
+const int freq = 3000;
 
-unsigned int analog_read_threshold = 1500; // from 4096
+unsigned int analog_read_threshold = 1500;
 float temp_threshold = 1.0;
 uint8_t signal_threshold = 2;
 uint8_t TEMP_THRESHOLD_BIAS = 3.0;
@@ -284,44 +287,44 @@ unsigned long prevRfTime = 0;
 
 static const unsigned char PROGMEM image_Icon_Wifi_bits[] = {0x1e, 0x00, 0x7f, 0x80, 0xc0, 0xc0, 0x9e, 0x40, 0x3f, 0x00, 0x21, 0x00, 0x0c, 0x00, 0x0c, 0x00};
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-//  Create AsyncWebServer object on port 80
+
+
 AsyncWebServer server(80);
 AsyncEventSource events("/events");
 
-// a string to hold NTP server to request epoch time
-// const char *ntpServer = "europe.pool.ntp.org";
+
+
 const char *ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 12600;
 const int daylightOffset_sec = 0;
-// Variable to hold current epoch timestamp
+
 unsigned long Epoch_Time;
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 
 Ticker flipper;
 
-// ESP32Time rtc;bu
-ESP32Time rtc(0); // offset in seconds GMT+1
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+ESP32Time rtc(0);
 
-#define SHORT_PRESS_TIME 2000     // 30000 milliseconds
-#define LONG_PRESS_TIME 5000      // 30000 milliseconds
-#define VERY_LONG_TIME 8000       // 30000 milliseconds
-#define SUPER_LONG_TIME 12000     // 30000 milliseconds
-#define MQTT_REPORT_INTERVAL 3000 // 30000 milliseconds
+
+
+#define SHORT_PRESS_TIME 2000
+#define LONG_PRESS_TIME 5000
+#define VERY_LONG_TIME 8000
+#define SUPER_LONG_TIME 12000
+#define MQTT_REPORT_INTERVAL 3000
 #define SENSOR_DEBOUNCE_DELAY 2000
 
-// GSM Module RX pin to Arduino 3
-// GSM Module TX pin to Arduino 2
-#define rxPin 16 // 1
-#define txPin 17 // 2
 
-// #define SENSOR_1 18
-// #define SENSOR_2 19
-// #define SENSOR_3 21
-// #define SENSOR_4 22
+
+#define rxPin 16
+#define txPin 17
+
+
+
+
+
 
 #define BUTTON_PIN 25
 #include <Bounce2.h>
@@ -329,7 +332,7 @@ Bounce2::Button button = Bounce2::Button();
 
 #define RESET_GSM 27
 
-// #define BUILTIN_LED 32
+
 
 #define STATUS_LED 2
 
@@ -337,19 +340,19 @@ String outStates = "";
 String inStates = "";
 String pwmStates = "";
 
-// boolean STATE_RELAY_1 = 0;
-// boolean STATE_RELAY_2 = 0;
-// boolean STATE_RELAY_3 = 0;
-// boolean STATE_RELAY_4 = 0;
-// MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+
+
+
+
 String smsStatus, senderNumber, receivedDate, msg, date = "";
 boolean smsIsReady = false;
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 
 boolean DEBUG_MODE = 1;
 
-/// setting variables
+
 bool simInserted = false;
 bool gsmNetwork = false;
 bool hasWifi = false;
@@ -364,12 +367,12 @@ unsigned int remoteCount = 0;
 
 unsigned long now = millis();
 unsigned long lastTrigger = 0;
-// unsigned long pressStartTime1 = 0;
-// unsigned long pressStartTime2 = 0;
-// unsigned long pressStartTime3 = 0;
-// unsigned long pressStartTime4 = 0;
 
-// boolean remoteFlag = 0;
+
+
+
+
+
 
 const char *PARAM_INPUT_1 = "output";
 const char *PARAM_INPUT_2 = "state";
@@ -382,9 +385,125 @@ uint count = 0;
 unsigned long pressedTime = 0;
 unsigned long releasedTime = 0;
 unsigned long previousMillis = 0;
-
-//=======================================================================
-// Replaces placeholder with DHT values
+String processor(const String &var);
+void callback(char *topic, byte *payload, unsigned int length);
+void reconnect();
+void initLittleFS();
+bool initWiFi();
+void setupLCD();
+void initDisplay();
+void updateDisplay();
+void updateSignalDisp();
+void updateOperatorDisp();
+void updateStatesDSP();
+void updateTempDSP();
+void loadingDisplay(int progress, String title);
+void alertDisplay();
+void alertEnableDisplay();
+void updatedDisplay();
+void smsDisplay();
+void clearSmsDisplay();
+void reloadDisplay();
+void displayRemoteRg(String remote, unsigned long time);
+void displayRemoteDel(String remote, unsigned long time);
+void i2cScanner();
+void setup();
+void checkSimNetwork();
+void loop();
+void getEnergyCons();
+void processTasks();
+void checkRelayTimes();
+void switchRelay(uint8_t index, bool state, uint16_t time, bool isLocked);
+void runScenarios();
+void notifHexSms(int index, String phone);
+void setupVariables();
+bool processScenarios(String command, uint8_t index);
+void handlePostRequest(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
+void initWifiAp();
+String getMAC();
+bool printLocalTime();
+void setTimezone(String timezone);
+void resetWifi();
+String createDateString(const struct tm &timeinfo, int timezoneOffset);
+boolean TimePeriodIsOver(unsigned long &periodStartTime, unsigned long TimePeriod);
+void publishReport(const char *payload);
+void checkSensors();
+void readAnalogs();
+void checkRfRemote();
+void readButton();
+void handleShortPress();
+void handleRemoteRegister();
+void saveRemoteCode(const char *code, uint16_t out);
+void handleRemoveRemote();
+void removeAllRemotes();
+void removeRemoteCode(const char *code);
+void compareRemote(String received);
+void initSim800Mqtt();
+void setupGSM();
+void initSms();
+void checkMqttStatus();
+String SendShortCommand(String command, String response);
+String WaitForResponse(String response);
+bool checkSim();
+void getOperator(bool report);
+void getSignalQuality(bool report);
+void blinkLed();
+void GsmSoftReset();
+void GsmReset();
+void checkOutputSch(uint8_t input);
+String addScenario(String val);
+void removeScenario(const char *key);
+void readyForSms();
+void receiveSms();
+void getGsmDateTime();
+void parseData(String buff);
+void extractUssd(String buff);
+void readSerial();
+bool isRegistered();
+void extractSms(String buff);
+void updateDate(String dateTime);
+void checkHourTasks();
+void checkSmsHistory();
+void checkTasks();
+void setAverageElement();
+void createMovingAverage();
+void saveLastRelayStates();
+void sendMqttFeedback();
+void setPwm(uint8_t index, uint8_t percent);
+void clearTimer(uint8_t index);
+void doAction(String phoneNumber);
+void clearSmsVariables();
+String outputIsBusy(uint8_t index);
+void Reply(String text, String Phone);
+void ReplyHex(String text, String Phone);
+void ForwardHex(String text, String Phone);
+void callAdmin(int index);
+void hangUp();
+void answerCall();
+void writeToEEPROM(const char *addrOffset, const String &strToWrite);
+void writeIntToEEPROM(const char *addrOffset, unsigned int value);
+void writeDateTimeEEPROM(const char *addrOffset, const String &strToWrite);
+String readFromEEPROM(const char *addrOffset);
+int readIntFromEEPROM(const char *addrOffset);
+boolean comparePhone(String number);
+void flip();
+void debugPrint(String text);
+String createOutArray();
+String createPwmArray();
+String createInArray();
+String createSettingArray();
+String prepareData();
+String mqttPeresence();
+String createTimersArray();
+String createScenariosArray();
+String prepareDbData(String event);
+String prepareDbLog(String event);
+String prepareTimersData();
+String prepareSync();
+String prepareSMSStats();
+void checkUpdate(String firmwareUrl);
+void update_progress(int cur, int total);
+#line 388 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 String processor(const String &var)
 {
   if (var == "BUTTONPLACEHOLDER")
@@ -404,12 +523,12 @@ void callback(char *topic, byte *payload, unsigned int length)
   Serial.print(topic);
   Serial.print("] ");
 
-  // Convert uint8_t* to char*
+
   unsigned char base64Data[length + 1];
   memcpy(base64Data, payload, length);
   base64Data[length] = '\0';
 
-  // // Decode base64 data
+
   unsigned char decodedData[256];
   int decodedLen = decode_base64(base64Data, decodedData);
 
@@ -422,11 +541,11 @@ void callback(char *topic, byte *payload, unsigned int length)
     Serial.println(error.f_str());
     return;
   }
-  // Access the JSON values
-  int out = doc["out"].as<int>();           // Use as<const char*> for conversion;
-  String event = doc["event"].as<String>(); // Use as<const char*> for conversion;
+
+  int out = doc["out"].as<int>();
+  String event = doc["event"].as<String>();
   Serial.println(event);
-  ///////////////////////////////////////////////////////////////////////////
+
   if (event == "io")
   {
     int type = doc["type"].as<String>().toInt();
@@ -435,7 +554,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     {
       time = doc["time"].as<int>();
     }
-    bool state = doc["state"].as<bool>(); // Use as<const char*> for conversion;
+    bool state = doc["state"].as<bool>();
     String prg = outputIsBusy(out);
 
     Serial.print("event io : ");
@@ -444,7 +563,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     {
       outputs[out].type = type;
       switchRelay(out, !state, time, false);
-      // Serial.println("switch relay");
+
       doc["mac"] = mac;
       doc["event"] = "feedback";
       doc["oSt"] = outStates;
@@ -453,77 +572,33 @@ void callback(char *topic, byte *payload, unsigned int length)
       Serial.println(result);
       publishReport(result.c_str());
 
-      // updateStatesDSP();
+
     }
     else
     {
       Serial.println("output is busy");
     }
-    ///////////////////////////////////////////////////////////////////////////
+
   }
   else if (event == "pwm")
   {
 
-    uint8_t percent = doc["percent"].as<uint8_t>(); // Use as<const char*> for conversion;
+    uint8_t percent = doc["percent"].as<uint8_t>();
 
     Serial.print("event pwm : ");
     Serial.println(percent);
 
     setPwm(out, percent);
 
-    ///////////////////////////////////////////////////////////////////////////
+
   }
   else if (event == "son")
   {
-    // bool flag = 0;
-    // for (uint8_t i = 0; i < totalInputs; i++) {
-    //   if (inputs[i].value.charAt(0) == 's') {
-    //     uint8_t out = inputs[i].out - 1;
-    //     flag = 1;
-    //   }
-    // }
-    // if (flag) {
-    //   securityMode = true;
-    //   digitalWrite(STATUS_LED, HIGH);
-    //   alertEnableDisplay();
-    //   doc["mac"] = mac;
-    //   doc["event"] = "feedback";
-    //   doc["sets"] = createSettingArray();
-    //   String result;
-    //   serializeJson(doc, result);
-    //   mqtt.publish("action_server", result.c_str());
-
-    //   Serial.println(result);
-    // }
-    ///////////////////////////////////////////////////////////////////////////
+# 499 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   }
   else if (event == "soff")
   {
-    // bool flag = 0;
-    // for (uint8_t i = 0; totalInputs < 4; i++) {
-    //   if (inputs[i].value.charAt(0) == 's') {
-    //     uint8_t out = inputs[i].out - 1;
-
-    //     if (digitalRead(outputs[out].gpio) == LOW) {
-    //       flag = 1;
-    //       // digitalWrite(outputs[out].gpio, HIGH);
-    //       switchRelay(outputs[out].gpio, HIGH);
-    //     }
-    //   }
-    // }
-    // if (flag) {
-    //   securityMode = false;
-    //   digitalWrite(STATUS_LED, LOW);
-    //   doc["mac"] = mac;
-    //   doc["event"] = "feedback";
-    //   doc["sets"] = createSettingArray();
-    //   String result;
-    //   serializeJson(doc, result);
-    //   mqtt.publish("action_server", result.c_str());
-
-    //   Serial.println(result);
-    // }
-    ///////////////////////////////////////////////////////////////////////////
+# 527 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   }
   else if (event == "ain")
   {
@@ -532,7 +607,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     readAnalogs();
 
     Serial.println(analogInputs[0].voltage);
-    // Serial.println("switch relay");
+
     doc["mac"] = mac;
     doc["event"] = "feedback";
     JsonArray array = doc.createNestedArray("ain");
@@ -548,16 +623,16 @@ void callback(char *topic, byte *payload, unsigned int length)
 
     publishReport(result.c_str());
 
-    ///////////////////////////////////////////////////////////////////////////
+
   }
   else if (event == "label")
   {
 
-    String label = doc["label"].as<String>(); // Use as<const char*> for conversion;
+    String label = doc["label"].as<String>();
     uint8_t out = (msg.substring(1, 2).toInt()) - 1;
     if (out != -1)
     {
-      String tempLabel = doc["label"].as<String>(); // Use as<const char*> for conversion;
+      String tempLabel = doc["label"].as<String>();
 
       writeToEEPROM(outputs[out].labelKey, tempLabel);
       outputs[out].label = tempLabel;
@@ -566,13 +641,13 @@ void callback(char *topic, byte *payload, unsigned int length)
   }
   else if (event == "timer")
   {
-    String tempSch = doc["timer"].as<String>(); // Use as<const char*> for conversion;
+    String tempSch = doc["timer"].as<String>();
 
     String outPrg = outputIsBusy(out);
     if (outPrg != "")
     {
       String text = "رله " + String(out + 1) + " در حالت سناریو قرار دارد ";
-      // text = text + ((outPrg.charAt(0) == 's') ? "دزدگیر قرار دارد" : "پمپ قرار دارد");
+
       Serial.println(text);
       return;
     }
@@ -616,13 +691,13 @@ void callback(char *topic, byte *payload, unsigned int length)
     {
       toggleTimers[out] = -1;
     }
-    // checkTasks();
-    ///////////////////////////////////////////////////////////////////////////
+
+
   }
   else if (event == "scn")
   {
 
-    String tempPrg = doc["value"].as<String>(); // Use as<const char*> for conversion;
+    String tempPrg = doc["value"].as<String>();
     String key = doc["key"].as<String>();
     Serial.println(tempPrg);
     if (tempPrg == "")
@@ -643,7 +718,7 @@ void callback(char *topic, byte *payload, unsigned int length)
       }
     }
 
-    ///////////////////////////////////////////////////////////////////////////
+
   }
   else if (event == "status")
   {
@@ -651,7 +726,7 @@ void callback(char *topic, byte *payload, unsigned int length)
 
     publishReport(result.c_str());
 
-    ///////////////////////////////////////////////////////////////////////////
+
   }
   else if (event == "update")
   {
@@ -678,7 +753,7 @@ void callback(char *topic, byte *payload, unsigned int length)
 
       updatedDisplay();
     }
-    ///////////////////////////////////////////////////
+
   }
   else if (event == "rfReg")
   {
@@ -688,7 +763,7 @@ void callback(char *topic, byte *payload, unsigned int length)
   else if (event == "rfDel")
   {
     handleRemoveRemote();
-    ///////////////////////////////////////////////////
+
   }
   else if (event == "admins")
   {
@@ -707,13 +782,13 @@ void callback(char *topic, byte *payload, unsigned int length)
     Serial.println(index);
     if ((index <= 5 && index >= 0) && (tempPhone == ""))
     {
-      //// remove index number
+
       writeToEEPROM(offsetPhone[index], "");
       phoneNo[index] = tempPhone;
     }
     else if ((index >= 0 && index <= 5) && tempPhone.length() == 13)
     {
-      //// add number
+
       phoneNo[index] = tempPhone;
       writeToEEPROM(offsetPhone[index], tempPhone);
     }
@@ -742,7 +817,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     publishReport(result.c_str());
   }
 
-  // Switch on the LED if an 1 was received as first character
+
 }
 uint8_t mqtt_count = 0;
 
@@ -757,7 +832,7 @@ void reconnect()
   const char *broker = m_server.c_str();
   if (hasWifi && !gprsConnected && !forceUseGprs)
   {
-    activeClient = &wifiClient; // Use WiFiClient
+    activeClient = &wifiClient;
     mqtt.setClient(*activeClient);
     mqtt.setServer(broker, port);
     mqtt.setCallback(callback);
@@ -768,7 +843,7 @@ void reconnect()
 
   else if (gprsConnected)
   {
-    activeClient = &gsmClient; // Use TinyGsmClient
+    activeClient = &gsmClient;
 
     mqtt.setClient(*activeClient);
     mqtt.setServer(broker, port);
@@ -780,18 +855,18 @@ void reconnect()
   }
   mqtt.setBufferSize(1024);
 
-  // Loop until we're reconnected
+
   while (!mqtt.connected() && mqtt_count<3)
   {
     mqtt_connected = false;
     Serial.print("Attempting MQTT connection...");
-    // Create a random client ID
+
     char clientId[24];
     snprintf(clientId, sizeof(clientId), "ESP32Client-%04X", random(0xffff));
 
     String myTopic = sub_topic + ">" + mac;
 
-    // String m_password = "123456";
+
     StaticJsonDocument<64> payload;
     payload["event"] = "state";
     payload["mac"] = mac;
@@ -801,15 +876,15 @@ void reconnect()
     char jsonBuffer[128];
     serializeJson(payload, jsonBuffer, sizeof(jsonBuffer));
 
-    // Attempt to connect with last Will Message
+
     if (mqtt.connect(clientId, "hosein282", "At9127995883", "action_server", 0, false, jsonBuffer))
     {
       mqtt_count = 0;
       Serial.println("connected");
       Serial.println("Sub to");
       Serial.println(myTopic);
-      // Once connected, publish an announcement...
-      // String sts = prepareDbData("report");
+
+
       StaticJsonDocument<64> payload;
       payload["event"] = "state";
       payload["mac"] = mac;
@@ -819,11 +894,11 @@ void reconnect()
       char jsonBuffer[128];
       serializeJson(payload, jsonBuffer, sizeof(jsonBuffer));
 
-      // String peresence = mqttPeresence();
-      // mqtt.publish("action_server", JSON.c_str());
+
+
       publishReport(jsonBuffer);
 
-      // ... and resubscribe
+
       mqtt.subscribe(myTopic.c_str());
       mqtt_connected = true;
     }
@@ -831,16 +906,16 @@ void reconnect()
     {
       Serial.print("failed, rc=");
       Serial.print(mqtt.state());
-      // Wait 5 seconds before retrying
+
       mqtt_count = mqtt_count + 1;
       delay(1500);
     }
   }
 }
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 
-// Initialize LittleFS
+
+
 void initLittleFS()
 {
   if (!LittleFS.begin(true))
@@ -849,7 +924,7 @@ void initLittleFS()
   }
   Serial.println("LittleFS mounted successfully");
 
-  // Get all information of your LITTLEFS
+
 
   unsigned int totalBytes = LittleFS.totalBytes();
   unsigned int usedBytes = LittleFS.usedBytes();
@@ -865,7 +940,7 @@ void initLittleFS()
   Serial.println("byte");
 }
 
-// Read File from LittleFS
+
 String readFile(fs::FS &fs, const char *path)
 {
   Serial.printf("Reading file: %s\r\n", path);
@@ -879,16 +954,16 @@ String readFile(fs::FS &fs, const char *path)
 
   String fileContent = file.readString();
   file.close();
-  // String fileContent;
-  // while (file.available())
-  // {
-  //   fileContent = file.readStringUntil('\n');
-  //   break;
-  // }
+
+
+
+
+
+
   return fileContent;
 }
 
-// Write file to LittleFS
+
 void writeFile(fs::FS &fs, const char *path, const char *message)
 {
   Serial.printf("Writing file: %s\r\n", path);
@@ -910,11 +985,11 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
 
 void deleteData(fs::FS &fs, const char *path)
 {
-  // Remove the file
+
   fs.remove(path);
 }
 
-// Initialize WiFi
+
 bool initWiFi()
 {
   wifiTryCount++;
@@ -924,12 +999,12 @@ bool initWiFi()
     return false;
   }
 
-  // IPAddress localIP(192, 168, 1, 48);
 
-  // Set your Gateway IP address
-  // IPAddress localGateway(192, 168, 1, 1);
-  // IPAddress localGateway(192, 168, 1, 1); //hardcoded
-  // IPAddress subnet(255, 255, 255, 0);
+
+
+
+
+
   if (ssid == "" || password == "")
   {
     Serial.println("Undefined SSID or IP address.");
@@ -938,14 +1013,7 @@ bool initWiFi()
   }
 
   WiFi.mode(WIFI_STA);
-
-  // localIP.fromString(ip.c_str());
-  // localGateway.fromString(gateway.c_str());
-
-  // if (!WiFi.config(localIP, localGateway, subnet)) {
-  //   Serial.println("STA Failed to configure");
-  //   return false;
-  // }
+# 949 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   WiFi.begin(ssid, password);
   Serial.println("Connecting to WiFi...");
 
@@ -958,13 +1026,13 @@ bool initWiFi()
     if (currentMillis - previousMillis >= 10000)
     {
       Serial.println("Failed to connect.");
-      // resetWifi();
+
       return false;
     }
   }
 
   if (!MDNS.begin("hubway"))
-  { // Set the hostname to "esp32.local"
+  {
     Serial.println("Error setting up MDNS responder!");
   }
   Serial.print("Current ESP32 IP: ");
@@ -982,12 +1050,12 @@ bool initWiFi()
       "/sw", HTTP_POST, [](AsyncWebServerRequest *request)
       { Serial.println("sw"); },
       NULL, handlePostRequest);
-  // Send a GET request to <ESP_IP>/update?output=<inputMessage1>&state=<inputMessage2>
+
   server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request)
             {
     String inputMessage1;
     String inputMessage2;
-    // GET input1 value on <ESP_IP>/update?output=<inputMessage1>&state=<inputMessage2>
+
     if (request->hasParam(PARAM_INPUT_1) && request->hasParam(PARAM_INPUT_2)) {
       inputMessage1 = request->getParam(PARAM_INPUT_1)->value();
       inputMessage2 = request->getParam(PARAM_INPUT_2)->value();
@@ -996,7 +1064,7 @@ bool initWiFi()
         clearTimer(inputMessage1.toInt());
       }
       switchRelay(inputMessage1.toInt(), inputMessage2.toInt(), 0, false);
-      // digitalWrite(outputs[inputMessage1.toInt()].gpio, );
+
 
     } else if (request->hasParam(PARAM_INPUT_1) && request->hasParam(PARAM_INPUT_3)) {
       inputMessage1 = request->getParam(PARAM_INPUT_1)->value();
@@ -1006,7 +1074,7 @@ bool initWiFi()
       if (inputMessage2.toInt() == 0) {
         clearTimer(inputMessage1.toInt());
       } else {
-        //set new timer
+
         uint8_t index = inputMessage1.toInt();
         writeDateTimeEEPROM(outputs[index].timerKey, inputMessage2);
         outputs[index].timer = inputMessage2;
@@ -1018,7 +1086,7 @@ bool initWiFi()
       inputMessage2 = request->getParam(PARAM_INPUT_2)->value();
       debugPrint(inputMessage2);
 
-      //set new timer
+
       uint8_t index = inputMessage1.toInt();
       uint8_t percent = inputMessage2.toInt();
       setPwm(index, percent);
@@ -1031,9 +1099,9 @@ bool initWiFi()
       inputMessage1 = request->getParam("date")->value();
       debugPrint(inputMessage1);
 
-      //set new timer
+
       String dateTime = inputMessage1;
-      //"24/07/06,19:09:38+14"
+
       dateTime = "\"" + dateTime + "\"";
       Serial.println(dateTime);
 
@@ -1083,7 +1151,7 @@ bool initWiFi()
         response->addHeader("Connection", "close");
         request->send(response);
       } });
-  // Handle Web Server Events
+
   events.onConnect([](AsyncEventSourceClient *client)
                    {
                      if (deviceYear < 20)
@@ -1094,9 +1162,9 @@ bool initWiFi()
                      {
                        Serial.printf("Client reconnected! Last message ID that it got is: %u\n", client->lastId());
                      }
-                     // send event with message "hello!", id current millis
-                     // and set reconnect delay to 1 second
-                     // client->send("hello!", NULL, millis(), 10000);
+
+
+
                    });
 
   server.addHandler(&events);
@@ -1108,7 +1176,7 @@ bool addTask(void (*taskFunction)(), unsigned long delay)
 {
   if (taskCount >= MAX_TASKS)
   {
-    return false; // صف پر است
+    return false;
   }
 
   taskQueue[taskCount].function = taskFunction;
@@ -1116,12 +1184,12 @@ bool addTask(void (*taskFunction)(), unsigned long delay)
   taskCount++;
   return true;
 }
-// MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 
 void setupLCD()
 {
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
-  { // Address 0x3D for 128x64
+  {
     Serial.println(F("SSD1306 allocation failed"));
     for (;;)
       ;
@@ -1135,8 +1203,8 @@ void initDisplay()
 
   display.clearDisplay();
 
-  // display.setCursor(2, 14);
-  // display.println("GSM");
+
+
 
   display.setCursor(2, 24);
   display.println("NET");
@@ -1146,16 +1214,16 @@ void initDisplay()
 
   display.setCursor(2, 44);
   display.println("ENERGY");
-  // display.setCursor(2, 54);
-  // display.println("OUTPUTS");
+
+
   updateStatesDSP();
   display.display();
 }
 
 void updateDisplay()
 {
-  // mcp.clearInterrupts();
-  // TODO
+
+
   String m = String(rtc.getMinute());
   String d = String(rtc.getDate());
   if (m.length() == 1)
@@ -1203,9 +1271,9 @@ void updateDisplay()
   {
     display.setCursor(108, 14);
     display.println("x");
-    // display.drawRect(114, 16, 3, 4, 1);
-    // display.drawRect(118, 14, 3, 6, 1);
-    // display.drawRect(122, 12, 3, 8, 1);
+
+
+
   }
   else if (signalQuality > 0 && signalQuality <= 7)
   {
@@ -1239,21 +1307,21 @@ void updateDisplay()
 
   if (WiFi.status() == WL_CONNECTED)
   {
-    // display.setCursor(74, 34);
+
     display.drawBitmap(118, 12, image_Icon_Wifi_bits, 10, 8, 1);
-    // display.println("CONNECTED");
+
   }
   else
   {
-    // display.drawBitmap(118, 12, image_Icon_Wifi_bits, 10, 8, 1);
+
     display.setCursor(118, 14);
 
     display.println("x");
     display.setTextSize(1);
-    // display.setTextColor(WHITE);
 
-    // display.setCursor(120, 10);
-    // display.println("/");
+
+
+
   }
 
   display.fillRect(86, 24, 42, 7, 0);
@@ -1276,26 +1344,7 @@ void updateDisplay()
   display.println(amp);
   display.setCursor(122, 44);
   display.println("W");
-
-  // if (outStates != "")
-  // {
-  //   String outs;
-  //   for (uint8_t i = 0; i < totalOutputs; i++)
-  //   {
-  //     outs += outStates[(i * 2) + 1];
-  //   }
-  //   // outStates.replace(",", "");
-  //   display.fillRect(50, 54, 78, 7, 0);
-
-  //   display.setCursor(128 - (outs.length() * 6), 54);
-  //   display.println(outs);
-  // }
-  // display.setCursor(2, 54);
-  // display.println("INPUTS");
-  // if (inStates != "") {
-  //   display.setCursor(128 - (inStates.length() * 6), 54);
-  //   display.println(inStates);
-  // }
+# 1299 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   display.display();
 }
 void updateSignalDisp()
@@ -1306,9 +1355,9 @@ void updateSignalDisp()
   {
     display.setCursor(108, 12);
     display.println("x");
-    // display.drawRect(114, 16, 3, 4, 1);
-    // display.drawRect(118, 14, 3, 6, 1);
-    // display.drawRect(122, 12, 3, 8, 1);
+
+
+
   }
   else if (signalQuality > 0 && signalQuality <= 7)
   {
@@ -1385,20 +1434,7 @@ void updateStatesDSP()
       display.print(String(i + 1));
     }
   }
-
-  // display.setCursor(2, 54);
-  // display.println("OUTPUTS");
-  // if (outStates != "")
-  // {
-  //   String outs;
-  //   for (uint8_t i = 0; i < totalOutputs; i++)
-  //   {
-  //     outs += outStates[(i * 2) + 1];
-  //   }
-  //   display.setCursor(128 - (outs.length() * 6), 54);
-  //   display.println(outs);
-  // }
-
+# 1402 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   display.display();
 }
 void updateTempDSP()
@@ -1494,10 +1530,10 @@ void smsDisplay()
 
   static const unsigned char PROGMEM image_ALARM_icon_bits[] = {0x00, 0x00, 0x13, 0xc8, 0x66, 0x66, 0x4c, 0x32, 0x8a, 0x11, 0x98, 0x19, 0x10, 0x08, 0x10, 0x08, 0x10, 0x08, 0x3f, 0xfc, 0x60, 0x06, 0x7f, 0xfe, 0x7f, 0xfe, 0x06, 0x60, 0x03, 0xc0, 0x00, 0x00};
 
-  // ALARM box
-  // display.fillRoundRect(50, 12, 26, 17, 3, 1);
 
-  // ALARM icon
+
+
+
   display.drawBitmap(54, 14, image_ALARM_icon_bits, 8, 8, 1);
   display.display();
 
@@ -1581,17 +1617,17 @@ void i2cScanner()
   }
   delay(5000);
 }
-/*******************************************************************************
- * setup function
- ******************************************************************************/
+
+
+
 void setup()
 {
   EEPROM.begin("esp");
-  // REMOTES.begin("remotes");
 
-  // aes128.setKey(aes_key, 16);  // Setting Key for AES
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+
+
   Serial.begin(9600);
   delay(1000);
 
@@ -1604,32 +1640,32 @@ void setup()
   Serial.print("free Entries: ");
   Serial.println(EEPROM.freeEntries());
 
-  emon.current(ctPin, 30.0); // نسبت کالیبراسیون (تغییر بده برای دقت بهتر)
+  emon.current(ctPin, 30.0);
 
-  // Serial.println(REMOTES.freeEntries());
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+
 
   Serial2.begin(9600, SERIAL_8N1, rxPin, txPin);
   delay(1000);
   loadingDisplay(0, "Setup");
 
-  // i2cScanner();
+
   pinMode(RESET_GSM, OUTPUT);
   GsmReset();
 
-  // modem.init();
+
   delay(3000);
-  esp_task_wdt_init(100, true); // timeout = 5 ثانیه، ریست سیستم در صورت تایم‌اوت
+  esp_task_wdt_init(100, true);
   esp_task_wdt_add(NULL);
 
   initLittleFS();
-  // Reset Pin
+
 
   loadingDisplay(10, "Init Data");
 
-  // first parameter is name of access point, second is the password
-  //  wifiManager.autoConnect("GSM-Controller", "123456");
-  //  Start the DS18B20 sensor
+
+
+
   sensors.begin();
 
   sensors.requestTemperatures();
@@ -1641,23 +1677,23 @@ void setup()
   }
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
-  // Receiver on interrupt 0 => that is pin #2
+
   mySwitch.enableReceive(13);
 
-  button.attach(BUTTON_PIN, INPUT_PULLUP); // USE EXTERNAL PULL-UP
+  button.attach(BUTTON_PIN, INPUT_PULLUP);
 
   button.interval(5);
-  // INDICATE THAT THE LOW STATE CORRESPONDS TO PHYSICALLY PRESSING THE BUTTON
+
   button.setPressedState(LOW);
 
   Serial.println("SIM800L software serial initialize");
 
   loadingDisplay(20, "init I/O");
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 
   Serial.println("MCP23xxx Combo Test!");
-  // uncomment appropriate mcp.begin
+
   if (!mcp.begin_I2C(0x20))
   {
     Serial.println("Error.");
@@ -1667,23 +1703,23 @@ void setup()
     delay(1000);
     for (uint8_t i = 0; i < totalOutputs; i++)
     {
-      // switchRelay(i, outputs[i].state);
+
 
       mcp.pinMode(outputs[i].gpio, OUTPUT);
       delay(100);
 
       mcp.digitalWrite(outputs[i].gpio, LOW);
-      // pinMode(outputs[i].gpio, OUTPUT); // Relay 1
+
     }
     for (uint8_t i = 0; i < totalInputs; i++)
     {
-      mcp.pinMode(inputs[i].gpio, INPUT_PULLUP); // Relay 1
+      mcp.pinMode(inputs[i].gpio, INPUT_PULLUP);
       delay(100);
       mcp.disableInterruptPin(inputs[i].gpio);
 
-      // Serial.println("i :");
-      // Serial.print(i);
-      // Serial.println(mcp.digitalRead(inputs[i].gpio));
+
+
+
     }
   }
 
@@ -1695,15 +1731,15 @@ void setup()
 
   loadingDisplay(30, "Load Data");
 
-  // pinMode(BUILTIN_LED, OUTPUT);  //Relay 4
-  digitalWrite(STATUS_LED, LOW);
-  pinMode(STATUS_LED, OUTPUT); // Relay 4
-  // digitalWrite(BUILTIN_LED, LOW);
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+  digitalWrite(STATUS_LED, LOW);
+  pinMode(STATUS_LED, OUTPUT);
+
+
+
   setupVariables();
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
   loadingDisplay(40, "Set Wifi");
 
   if (initWiFi())
@@ -1723,20 +1759,7 @@ void setup()
     loadingDisplay(55, "Setup GSM");
 
     setupGSM();
-    // while (!isRegistered())
-    // {
-    //   gsmCounter = gsmCounter + 1;
-    //   flipper.attach(0.5, flip);
-    //   loadingDisplay(50 + (gsmCounter * 6), "Setup GSM");
-    //   delay(3000);
-    //   if (gsmCounter > 6)
-    //   {
-    //     GsmSoftReset();
-    //     gsmCounter = 0;
-    //     // flipper.detach();
-    //     break;
-    //   }
-    // }
+# 1740 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   }
   else
   {
@@ -1746,23 +1769,15 @@ void setup()
   loadingDisplay(100, "Completed");
 
   delay(500);
-
-  // if (gsmNetwork)
-  // {
-  //   setupGSM();
-  // }
-
-  // Initialize Ticker every 0.5s
-  //  gsmTicker.attach(3600, getGsmDateTime);  //Use attach_ms if you need time in ms
-
+# 1758 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   if (phoneNo[0].length() == 13)
   {
-    // minTicker.attach(60, checkTasks);  //Use attach_ms if you need time in ms
 
-    // if (notifyScenarios) {
-    //   String txt = "دستگاه روشن شد و آماده به کار است";
-    //   // ReplyHex(txt, phoneNo[0]);
-    // }
+
+
+
+
+
     debugPrint("Admin Phone Is Registered");
     flipper.detach();
 
@@ -1773,7 +1788,7 @@ void setup()
 
   checkTasks();
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 }
 
 void checkSimNetwork()
@@ -1789,15 +1804,15 @@ void checkSimNetwork()
     {
       GsmSoftReset();
       gsmCounter = 0;
-      // flipper.detach();
+
       break;
     }
   }
 }
 
-/*******************************************************************************
- * Loop Function
- ******************************************************************************/
+
+
+
 
 unsigned long prevTemp = 0;
 
@@ -1806,13 +1821,13 @@ void loop()
 
   now = millis();
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
   while (Serial2.available() > 0)
   {
     parseData(Serial2.readString());
   }
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 
   if (now - prevTaskTime >= SCH_TASK_TIME)
   {
@@ -1821,7 +1836,7 @@ void loop()
   }
   esp_task_wdt_reset();
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 
   getEnergyCons();
 
@@ -1849,8 +1864,8 @@ void loop()
 
   processTasks();
 
-  // mqtt_connected =
-  // mqtt.loop();
+
+
   checkMqttStatus();
 }
 
@@ -1860,9 +1875,9 @@ void getEnergyCons()
   {
     lastSampleTime = now;
 
-    // اندازه‌گیری جریان RMS
+
     double Irms = emon.calcIrms(1480);
-    double power = Irms * assumedVoltage; // توان ظاهری
+    double power = Irms * assumedVoltage;
     double energyWh = (power * (sampleInterval / 1000.0)) / 3600.0;
 
     currentAmp.value += energyWh;
@@ -1879,14 +1894,14 @@ void processTasks()
 
     if (now >= taskQueue[i].executeAt)
     {
-      taskQueue[i].function(); // اجرای تسک
-      // حذف تسک اجرا شده از صف (جابجایی تسک‌های بعدی)
+      taskQueue[i].function();
+
       for (int j = i; j < taskCount - 1; j++)
       {
         taskQueue[j] = taskQueue[j + 1];
       }
       taskCount--;
-      i--; // چون یک تسک حذف شده، ایندکس را کاهش دهید
+      i--;
     }
   }
 }
@@ -1896,19 +1911,19 @@ void checkRelayTimes()
   for (uint8_t i = 0; i < totalOutputs; i++)
   {
     if (outputs[i].type == 0 || outputs[i].type == 2 || outputs[i].now == 0)
-      continue; // اگر لحظه ای یا لچ بود کنسل
+      continue;
 
     if (outputs[i].now > 0 && (millis() - outputs[i].now) >= (outputs[i].time * 1000))
     {
       boolean targetState = 0;
-      mcp.digitalWrite(outputs[i].gpio, targetState); // LOW for OFF STATE
+      mcp.digitalWrite(outputs[i].gpio, targetState);
       outputs[i].state = targetState;
       outStates[(i * 2) + 1] = targetState ? '1' : '0';
       Serial.println("targetState");
       Serial.println(outputs[i].state);
 
-      // check lock scenario
-      //////////////////////////////////////////////////
+
+
       for (int j = 0; j < totalScenarios; j++)
       {
         Scenario scenario = scenarios[j];
@@ -1929,23 +1944,23 @@ void checkRelayTimes()
           {
             mcp.digitalWrite(outputs[target].gpio, targetState);
             outputs[target].state = !targetState;
-            outStates[(target * 2) + 1] = targetState ? '1' : '0'; // index for pair  00 10 01
+            outStates[(target * 2) + 1] = targetState ? '1' : '0';
             continue;
           }
           else
           {
             mcp.digitalWrite(outputs[target].gpio, !targetState);
             outputs[target].state = !targetState;
-            outStates[(target * 2) + 1] = targetState ? '1' : '0'; // index for pair  00 10 01
+            outStates[(target * 2) + 1] = targetState ? '1' : '0';
             continue;
           }
         }
       }
 
-      // ارسال فیدبک
+
       sendMqttFeedback();
 
-      // تایمر را غیرفعال کن
+
       outputs[i].now = 0;
     }
   }
@@ -1966,12 +1981,12 @@ void switchRelay(uint8_t index, bool state, uint16_t time, bool isLocked)
   mcp.digitalWrite(outputs[index].gpio, state);
 
   outputs[index].state = state;
-  outStates[(index * 2) + 1] = state ? '1' : '0'; // index for pair  00 10 01
+  outStates[(index * 2) + 1] = state ? '1' : '0';
 
   Serial.println(outputs[index].state);
 
-  // check lock scenario
-  //////////////////////////////////////////////////
+
+
   for (int i = 0; i < totalScenarios; i++)
   {
     Scenario scenario = scenarios[i];
@@ -1992,23 +2007,23 @@ void switchRelay(uint8_t index, bool state, uint16_t time, bool isLocked)
       {
         mcp.digitalWrite(outputs[target].gpio, state);
         outputs[target].state = state;
-        outStates[(target * 2) + 1] = state ? '1' : '0'; // index for pair  00 10 01
+        outStates[(target * 2) + 1] = state ? '1' : '0';
         continue;
       }
       else
       {
         mcp.digitalWrite(outputs[target].gpio, !state);
         outputs[target].state = state;
-        outStates[(target * 2) + 1] = state ? '1' : '0'; // index for pair  00 10 01
+        outStates[(target * 2) + 1] = state ? '1' : '0';
         continue;
       }
     }
   }
-  ////////////////////////////////////////////////////
+
 
   sendMqttFeedback();
 
-  // when command is turn on timer resets
+
   if (state)
   {
     outputs[index].now = 0;
@@ -2019,10 +2034,10 @@ void switchRelay(uint8_t index, bool state, uint16_t time, bool isLocked)
   if (isLocked)
     return;
 
-  /////////////////////////////////////
+
   if (outputs[index].type == 0)
   {
-    // outputs[index].latched = !outputs[index].latched;  // unlock latch
+
     Serial.println("Unlock");
   }
   else if (outputs[index].type == 2 && state)
@@ -2030,25 +2045,25 @@ void switchRelay(uint8_t index, bool state, uint16_t time, bool isLocked)
     delay(1000);
     mcp.digitalWrite(outputs[index].gpio, !state);
     outputs[index].state = !state;
-    outStates[(index * 2) + 1] = !state ? '1' : '0'; // index for pair  00 10 01
-    // Serial.println(!outputs[index].state);
-    // Serial.println("toggle swtich");
+    outStates[(index * 2) + 1] = !state ? '1' : '0';
+
+
 
     sendMqttFeedback();
   }
   else if (outputs[index].type == 1 && !state)
   {
-    outputs[index].now = millis(); // زمان فعلی را ذخیره کن
-    outputs[index].time = time;    // زمان فعلی را ذخیره کن
+    outputs[index].now = millis();
+    outputs[index].time = time;
 
-    // Serial.println("3 second switch");
-    // Serial.println(outputs[index].now);
-    // Serial.println(outputs[index].time);
+
+
+
   }
   if (time > 0)
-  {                                // for delay timer
-    outputs[index].now = millis(); // زمان فعلی را ذخیره کن
-    outputs[index].time = time;    // زمان فعلی را ذخیره کن
+  {
+    outputs[index].now = millis();
+    outputs[index].time = time;
   }
 }
 
@@ -2059,17 +2074,17 @@ void runScenarios()
     Scenario scenario = scenarios[i];
     if (scenario.value.isEmpty())
       continue;
-    char it = scenario.value.charAt(0); // in type
-    char ot = scenario.value.charAt(1); // out type
+    char it = scenario.value.charAt(0);
+    char ot = scenario.value.charAt(1);
 
-    bool oCondition = false; // شرط اجرا شده آیا؟
+    bool oCondition = false;
 
-    bool conditionMet = false; // شرط لازم الاجرا
-    float ifStatement;         // مقدار فعلی آستانه بر اساس نوع شرط
-    float bias;                // مقدار استانه توقف
+    bool conditionMet = false;
+    float ifStatement;
+    float bias;
     int time = 0;
     if (scenario.swType == 1)
-    { // 3 ثانیه
+    {
       time = 3;
     }
 
@@ -2085,8 +2100,8 @@ void runScenarios()
     else if (it == 'd')
     {
       ifStatement = !mcp.digitalRead(inputs[scenario.input].gpio);
-      // Serial.println("ifStatement");
-      // Serial.println(ifStatement);
+
+
     }
     else if (it == 'a')
     {
@@ -2094,22 +2109,22 @@ void runScenarios()
       bias = THRESHOLD_BIAS;
     }
 
-    // اگر نوع خروجی دیمر باشد
+
     if (ot == 'p')
     {
       oCondition = pwms[scenario.outPin].pwm == scenario.outState;
     }
     else
     {
-      // اگر نوع خروجی رله باشد
+
       oCondition = outputs[scenario.outPin].state == scenario.outState;
-      // Serial.println("oCondition");
-      // Serial.println(outputs[scenario.outPin].state);
-      // Serial.println(scenario.outState);
-      // Serial.println(oCondition);
+
+
+
+
     }
 
-    ////////////////////////////////// input type is digital
+
 
     if (it == 'd' && ot == 'r')
     {
@@ -2124,23 +2139,23 @@ void runScenarios()
         {
           conditionMet = false;
         }
-        // Serial.println("oCondition =>it == d");
+
       }
       else if (scenario.condition == "!=" && (int)ifStatement != scenario.outState)
       {
         conditionMet = true;
       }
-      ////////////////////////////////// input type is temperature
+
     }
     else if (it == 't')
     {
 
       if (oCondition)
       {
-        /// already trigged
-        // Serial.println("relay is ON");
 
-        // ifStatement -= TEMP_THRESHOLD_BIAS;
+
+
+
         if (scenario.condition == ">" && ifStatement < scenario.threshold - bias)
         {
 
@@ -2156,42 +2171,42 @@ void runScenarios()
 
           conditionMet = true;
         }
-        /// not trigged
+
       }
       else
       {
         if (scenario.condition == ">" && ifStatement > scenario.threshold)
         {
-          // Serial.println("> is OFF");
+
 
           conditionMet = true;
         }
         else if (scenario.condition == "<" && ifStatement < scenario.threshold)
         {
-          // Serial.println("< is OFF");
+
 
           conditionMet = true;
         }
         else if (scenario.condition == "==" && ifStatement == scenario.threshold)
         {
-          // Serial.println("= is OFF");
+
 
           conditionMet = true;
         }
       }
-      ////////////////////////////////// input type is analog
+
     }
     else if (it == 'a')
     {
-      /// already trigged
+
 
       if (oCondition)
       {
-        // Serial.println("relay is ON");
-        // ifStatement -= TEMP_THRESHOLD_BIAS;
+
+
         if (scenario.condition == ">" && ifStatement < scenario.threshold - bias)
         {
-          // Serial.println("> is ON");
+
           conditionMet = true;
         }
         else if (scenario.condition == "<" && ifStatement > scenario.threshold + bias)
@@ -2202,38 +2217,38 @@ void runScenarios()
         {
           conditionMet = true;
         }
-        /// not trigged
+
       }
       else
       {
         if (scenario.condition == ">" && ifStatement > scenario.threshold)
         {
-          // Serial.println("> is OFF");
+
 
           conditionMet = true;
         }
         else if (scenario.condition == "<" && ifStatement < scenario.threshold)
         {
-          // Serial.println("< is OFF");
+
 
           conditionMet = true;
         }
         else if (scenario.condition == "==" && ifStatement == scenario.threshold)
         {
-          // Serial.println("= is OFF");
+
 
           conditionMet = true;
         }
       }
     }
 
-    // اجرای عملکرد اگر شرط برقرار شد
+
     if (conditionMet)
     {
       if (ot == 'p')
       {
         setPwm(scenario.outPin, scenario.outState);
-        // Serial.println("setPwm(scenario.outPin");
+
       }
       else
       {
@@ -2242,18 +2257,18 @@ void runScenarios()
           if (scenario.swType != 0)
           {
             switchRelay(scenario.outPin, !scenario.outState, time, false);
-            // Serial.println("conditionMet unlocked");
+
             continue;
-          } // lock type
+          }
           else
           {
-            // Serial.println("conditionMet lock type");
+
             continue;
           }
         }
         else
         {
-          // if (!outputs[scenario.outPin].locked) {
+
           switchRelay(scenario.outPin, scenario.outState, time, true);
           Serial.println("conditionMet locked");
           if (scenario.notif == 1 && notifyScenarios)
@@ -2266,22 +2281,22 @@ void runScenarios()
             callAdmin(i);
           }
           continue;
-          // }
+
         }
       }
     }
     else
     {
-      // for digital input
+
       if (scenario.condition == "==")
       {
         switchRelay(scenario.outPin, !scenario.outState, time, true);
-        // Serial.println("conditionMet ==");
+
       }
       else
       {
         switchRelay(scenario.outPin, scenario.outState, time, true);
-        // Serial.println("conditionMet !=");
+
       }
     }
   }
@@ -2292,8 +2307,8 @@ void notifHexSms(int index, String phone)
   if (phone == "")
     return;
   Scenario scenario = scenarios[index];
-  char it = scenario.value.charAt(0); // in type
-  char ot = scenario.value.charAt(1); // in type
+  char it = scenario.value.charAt(0);
+  char ot = scenario.value.charAt(1);
 
   String text = "سناریو " + String(index + 1) + "اجراشد " + "\n";
   if (it == 'a')
@@ -2308,7 +2323,7 @@ void notifHexSms(int index, String phone)
   {
     text += "دماسنج " + String(scenario.input + 1) + " از " + String(scenario.threshold);
   }
-  ////condition
+
   if (scenario.condition == ">")
   {
     text += " بیشتر شد";
@@ -2328,7 +2343,7 @@ void notifHexSms(int index, String phone)
     ReplyHex(text, phone);
   }
 }
-// main loop ends
+
 
 void setupVariables()
 {
@@ -2337,22 +2352,22 @@ void setupVariables()
   inStates = createInArray();
   pwmStates = createPwmArray();
 
-  // for (int i = 0; i < totalInputs; i++)
-  // {
-  //   inputFlag[i] = 0; // Set all elements to false
-  // }
+
+
+
+
   for (int i = 0; i < totalInputs; i++)
   {
-    inputs[i].lastTrigger = 0; // Set all elements to 0
+    inputs[i].lastTrigger = 0;
   }
   for (int i = 0; i < totalAnalogs; i++)
   {
-    analogInputs[i].lastTrigger = 0; // Set all elements to 0
+    analogInputs[i].lastTrigger = 0;
   }
 
   Serial.println("WIFI Credentials");
 
-  // Load values saved in LittleFS
+
   ssid = readFile(LittleFS, wifi_ssid);
   password = readFile(LittleFS, wifi_pass);
   String server = readFile(LittleFS, m_server_k);
@@ -2370,9 +2385,9 @@ void setupVariables()
   Serial.println(m_server);
   Serial.println(mac);
 
-  // }
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMF
+
+
 
   Serial.println("List of Registered Phone Numbers");
   for (uint8_t i = 0; i < totalPhoneNo; i++)
@@ -2389,7 +2404,7 @@ void setupVariables()
       Serial.println(String(i + 1) + ": " + phoneNo[i]);
     }
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 
   Serial.println("List of Schedules");
   for (uint8_t i = 0; i < totalOutputs; i++)
@@ -2411,62 +2426,7 @@ void setupVariables()
       }
     }
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-  //  Serial.println("List of inputs");
-  //  for (uint8_t i = 0; i < totalInputs; i++) {
-  //    inputs[i].value = readFromEEPROM(inputs[i].key);
-  //    if (inputs[i].value.length() < 1) {
-  //      inputs[i].value = "";
-  //      Serial.println(String(i + 1) + ": empty");
-  //    } else {
-  //      inputs[i].out = (inputs[i].value.substring(1).toInt()) - 1;
-
-  //     Serial.println(String(i + 1) + ": " + inputs[i].value);
-  //   }
-  // }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-  // Serial.println("List of chains");
-  // for (uint8_t index = 0; index < totalOutputs; index++) {
-  //   String key = "c" + String(index + 1);
-
-  //   String value = readFromEEPROM(key.c_str());
-  //   if (value.length() < 1) {
-  //     Serial.println(String(index + 1) + ": empty");
-  //   } else {
-  //     // Create a JSON document
-  //     StaticJsonDocument<200> doc;  // Adjust size as needed
-
-  //     // Deserialize the JSON string
-  //     DeserializationError error = deserializeJson(doc, value);
-
-  //     // Check for errors
-  //     if (error) {
-  //       Serial.print("Deserialization failed: ");
-  //       Serial.println(error.c_str());
-  //       return;
-  //     }
-
-  //     // Extract the JSON array
-  //     JsonArray jsonArray = doc.as<JsonArray>();
-
-  //     // Convert the JSON array back to an integer array
-  //     int arraySize = jsonArray.size();
-
-  //     for (int i = 0; i < arraySize; i++) {
-  //       outputs[index].chain[i] = jsonArray[i];  // Copy values from JSON array to integer array
-  //     }
-
-  //     // Print the integer array
-  //     // Serial.println("Integer array:");
-  //     // for (int i = 0; i < arraySize; i++) {
-  //     //   Serial.println(jsonArray[i]);
-  //     // }
-  //     // stringToArray(value, outputs[i].chain);
-
-  //     // Serial.println(String(index + 1) + ": " + outputs[index].chain[0]);
-  //   }
-  // }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+# 2470 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   Serial.println("List of Scenarios");
   for (uint8_t i = 0; i < totalScenarios; i++)
   {
@@ -2483,7 +2443,7 @@ void setupVariables()
       break;
     }
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
   Serial.println("List of Output Labels");
   for (uint8_t i = 0; i < totalOutputs; i++)
   {
@@ -2498,7 +2458,7 @@ void setupVariables()
       Serial.println(String(i + 1) + ": empty");
     }
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
   Serial.println("List of Input Labels");
   for (uint8_t i = 0; i < totalInputs; i++)
   {
@@ -2513,11 +2473,11 @@ void setupVariables()
       Serial.println(String(i + 1) + ": " + inputs[i].label);
     }
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-  Serial.println("List of Remotes");
-  const char *filePath = "/remotes.txt"; // File to store remote codes
 
-  // Read existing codes from the file
+  Serial.println("List of Remotes");
+  const char *filePath = "/remotes.txt";
+
+
   String fileContent = readFile(LittleFS, filePath);
   if (fileContent.isEmpty())
   {
@@ -2528,30 +2488,12 @@ void setupVariables()
     Serial.println("Remote Registered");
     Serial.println(fileContent);
   }
-  // Load and print stored remote codes
-  // for (int i = 0; i < totalRemotes; i++)
-  // { // Example: limit to 10 codes
-  //   String codeKey = "r" + String(i);
-  //   if (REMOTES.isKey(codeKey.c_str()))
-  //   {
-  //     remoteCount = remoteCount + 1;
-  //     Serial.print("Stored code: ");
-  //     Serial.println(REMOTES.getString(codeKey.c_str()));
-  //   }
-  // }
-  // if (remoteCount == 0)
-  // {
-  //   Serial.println("empty");
-  // }
-  // else
-  // {
-  //   Serial.println(remoteCount);
-  // }
+# 2550 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 }
 
 bool processScenarios(String command, uint8_t index)
 {
-  // dr1:==:1:3:1:s4
+
   int comma1 = command.indexOf(':');
   int comma2 = command.indexOf(':', comma1 + 1);
   int comma3 = command.indexOf(':', comma2 + 1);
@@ -2560,7 +2502,7 @@ bool processScenarios(String command, uint8_t index)
 
   String key = "s" + String(index + 1);
   strncpy(scenarios[index].key, key.c_str(), sizeof(scenarios[index].key) - 1);
-  scenarios[index].key[sizeof(scenarios[index].key) - 1] = '\0'; // Ensure null termination
+  scenarios[index].key[sizeof(scenarios[index].key) - 1] = '\0';
   Serial.println(scenarios[index].key);
   scenarios[index].input = command.substring(2, comma1).toInt();
   scenarios[index].condition = command.substring(comma1 + 1, comma2);
@@ -2594,16 +2536,16 @@ void handlePostRequest(AsyncWebServerRequest *request, uint8_t *data, size_t len
 {
   if (index == 0)
   {
-    // The first part of the request, we can process the data
-    // Serial.write(data, len);  // optional - print raw data to Serial
-    // Parse the JSON
 
-    // Convert uint8_t* to char*
+
+
+
+
     unsigned char base64Data[len + 1];
     memcpy(base64Data, data, len);
     base64Data[len] = '\0';
 
-    // Decode base64 data
+
     unsigned char decodedData[512];
     int decodedLen = decode_base64(base64Data, decodedData);
 
@@ -2626,14 +2568,14 @@ void handlePostRequest(AsyncWebServerRequest *request, uint8_t *data, size_t len
       return;
     }
 
-    // Access the JSON values
-    ssid = doc["ssid"].as<String>();         // Use as<const char*> for conversion;
-    password = doc["password"].as<String>(); // Use as<const char*> for conversion;
-    m_server = doc["m_server"].as<String>(); // Use as<const char*> for conversion;
+
+    ssid = doc["ssid"].as<String>();
+    password = doc["password"].as<String>();
+    m_server = doc["m_server"].as<String>();
 
     writeFile(LittleFS, wifi_ssid, ssid.c_str());
     writeFile(LittleFS, wifi_pass, password.c_str());
-    // writeFile(LittleFS, ankey, anon_key.c_str());
+
     writeFile(LittleFS, m_server_k, m_server.c_str());
     wifiTryCount = 0;
     StaticJsonDocument<128> payload;
@@ -2643,7 +2585,7 @@ void handlePostRequest(AsyncWebServerRequest *request, uint8_t *data, size_t len
     char jsonBuffer[128];
     serializeJson(payload, jsonBuffer, sizeof(jsonBuffer));
     Serial.println(jsonBuffer);
-    // "{\"status\":\"received\"}"
+
     request->send(200, "application/json", jsonBuffer);
     delay(3000);
     ESP.restart();
@@ -2662,7 +2604,7 @@ void initWifiAp()
   {
     mac = getMAC();
   }
-  // setupBLE();
+
   WiFi.setTxPower(WIFI_POWER_18_5dBm);
   WiFi.softAP(ssid_ap + mac.substring(0, 2) + mac.substring(9, 11) + mac.substring(15, 17), "2NyTf21=");
 
@@ -2671,22 +2613,22 @@ void initWifiAp()
   Serial.println(IP);
 
   if (!MDNS.begin("hubway"))
-  { // Set the hostname to "esp32.local"
+  {
     Serial.println("Error setting up MDNS responder!");
   }
 
-  // Route for root / web page
+
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
             {
-    // response->addHeader("Access-Control-Allow-Origin", "*");
+
 
     request->send_P(200, "text/html", index_html, processor); });
 
-  // Route for root / web page
+
   server.on("/ssid", HTTP_GET, [](AsyncWebServerRequest *request)
             {
-    // response->addHeader("Access-Control-Allow-Origin", "*");
-    // String payload = prepareSync();
+
+
     StaticJsonDocument<128> payload;
     payload["status"] = "received";
     payload["mac"] = mac;
@@ -2699,7 +2641,7 @@ void initWifiAp()
     char jsonBuffer[128];
     serializeJson(payload, jsonBuffer, sizeof(jsonBuffer));
     Serial.println(jsonBuffer);
-    // "{\"status\":\"received\"}"
+
     request->send(200, "application/json", jsonBuffer); });
 
   server.on(
@@ -2707,12 +2649,12 @@ void initWifiAp()
       { Serial.println("sw"); },
       NULL, handlePostRequest);
 
-  // Send a GET request to <ESP_IP>/update?output=<inputMessage1>&state=<inputMessage2>
+
   server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request)
             {
     String inputMessage1;
     String inputMessage2;
-    // GET input1 value on <ESP_IP>/update?output=<inputMessage1>&state=<inputMessage2>
+
     if (request->hasParam(PARAM_INPUT_1) && request->hasParam(PARAM_INPUT_2)) {
       inputMessage1 = request->getParam(PARAM_INPUT_1)->value();
       inputMessage2 = request->getParam(PARAM_INPUT_2)->value();
@@ -2722,7 +2664,7 @@ void initWifiAp()
       }
       switchRelay(inputMessage1.toInt(), inputMessage2.toInt(), 0, false);
 
-      // digitalWrite(outputs[inputMessage1.toInt()].gpio, inputMessage2.toInt());
+
 
     } else if (request->hasParam(PARAM_INPUT_1) && request->hasParam(PARAM_INPUT_3)) {
       inputMessage1 = request->getParam(PARAM_INPUT_1)->value();
@@ -2732,7 +2674,7 @@ void initWifiAp()
       if (inputMessage2.toInt() == 0) {
         clearTimer(inputMessage1.toInt());
       } else {
-        //set new timer
+
         uint8_t index = inputMessage1.toInt();
         writeDateTimeEEPROM(outputs[index].timerKey, inputMessage2);
         outputs[index].timer = inputMessage2;
@@ -2744,7 +2686,7 @@ void initWifiAp()
       inputMessage2 = request->getParam(PARAM_INPUT_2)->value();
       debugPrint(inputMessage2);
 
-      //set new timer
+
       uint8_t index = inputMessage1.toInt();
       uint8_t percent = inputMessage2.toInt();
       setPwm(index, percent);
@@ -2757,9 +2699,9 @@ void initWifiAp()
       inputMessage1 = request->getParam("date")->value();
       debugPrint(inputMessage1);
 
-      //set new timer
+
       String dateTime = inputMessage1;
-      //"24/07/06,19:09:38+14"
+
       dateTime = "\"" + dateTime + "\"";
       Serial.println(dateTime);
 
@@ -2810,7 +2752,7 @@ void initWifiAp()
         request->send(response);
       } });
 
-  // Handle Web Server Events
+
   events.onConnect([](AsyncEventSourceClient *client)
                    {
                      if (deviceYear < 20)
@@ -2821,9 +2763,9 @@ void initWifiAp()
                      {
                        Serial.printf("Client reconnected! Last message ID that it got is: %u\n", client->lastId());
                      }
-                     // send event with message "hello!", id current millis
-                     // and set reconnect delay to 1 second
-                     // client->send("hello!", NULL, millis(), 10000);
+
+
+
                    });
 
   server.addHandler(&events);
@@ -2834,7 +2776,7 @@ void initWifiAp()
 String getMAC()
 {
 
-  // Convert to upper case for standard MAC format
+
   String macStr = WiFi.macAddress();
   macStr.toUpperCase();
   Serial.println(macStr);
@@ -2845,12 +2787,12 @@ String getMAC()
 
 bool printLocalTime()
 {
-  // Sunday, December 01 2024 11:36:05
+
 
   Serial.print(F("Waiting for NTP time sync: "));
   struct tm timeinfo;
 
-  // time_t now = time(nullptr);
+
   uint8_t count = 0;
   while (count < 3 && !getLocalTime(&timeinfo))
   {
@@ -2869,7 +2811,7 @@ bool printLocalTime()
   String formattedDate = createDateString(timeinfo, 14);
   updateDate(formattedDate);
 
-  // time(&now);
+
   Epoch_Time = rtc.getEpoch();
   return true;
 }
@@ -2877,7 +2819,7 @@ bool printLocalTime()
 void setTimezone(String timezone)
 {
   Serial.printf("  Setting Timezone to %s\n", timezone.c_str());
-  setenv("TZ", timezone.c_str(), 1); //  Now adjust the TZ.  Clock settings are adjusted to show the new local time
+  setenv("TZ", timezone.c_str(), 1);
   tzset();
 }
 
@@ -2897,24 +2839,24 @@ void resetWifi()
 
 String createDateString(const struct tm &timeinfo, int timezoneOffset)
 {
-  // String to store the formatted date
+
   String dateString = "\"";
 
-  // Append day, month, year
-  dateString += String(timeinfo.tm_year % 100) + "/";                                                                        // Year since 1900
-  dateString += String(timeinfo.tm_mon + 1).length() == 1 ? "0" + String(timeinfo.tm_mon + 1) : String(timeinfo.tm_mon + 1); // Months are 0-based
-  dateString += "/";                                                                                                         // Months are 0-based
+
+  dateString += String(timeinfo.tm_year % 100) + "/";
+  dateString += String(timeinfo.tm_mon + 1).length() == 1 ? "0" + String(timeinfo.tm_mon + 1) : String(timeinfo.tm_mon + 1);
+  dateString += "/";
   dateString += String(timeinfo.tm_mday).length() == 1 ? "0" + String(timeinfo.tm_mday) : String(timeinfo.tm_mday);
   dateString += ",";
 
-  // Append hour, minute, second with proper formatting
+
   dateString += String(timeinfo.tm_hour).length() == 1 ? "0" + String(timeinfo.tm_hour) : String(timeinfo.tm_hour);
   dateString += ":";
   dateString += String(timeinfo.tm_min).length() == 1 ? "0" + String(timeinfo.tm_min) : String(timeinfo.tm_min);
   dateString += ":";
   dateString += String(timeinfo.tm_sec).length() == 1 ? "0" + String(timeinfo.tm_sec) : String(timeinfo.tm_sec);
 
-  // Append timezone offset
+
   dateString += (timezoneOffset >= 0 ? "+" : "") + String(timezoneOffset) + "\"";
 
   return dateString;
@@ -2925,54 +2867,54 @@ boolean TimePeriodIsOver(unsigned long &periodStartTime, unsigned long TimePerio
   unsigned long currentMillis = millis();
   if (currentMillis - periodStartTime >= TimePeriod)
   {
-    periodStartTime = currentMillis; // set new expireTime
-    return true;                     // more time than TimePeriod) has elapsed since last time if-condition was true
+    periodStartTime = currentMillis;
+    return true;
   }
   else
-    return false; // not expired
+    return false;
 }
 unsigned long prevMqttReport = 0;
 
 void publishReport(const char *payload)
 {
-  // if (millis() - prevMqttReport > MQTT_REPORT_INTERVAL) {
+
 
   mqtt.publish("action_server", payload);
 
   events.send(payload, "data", now);
-  // prevMqttReport = millis();
-  // }
+
+
 }
 void checkSensors()
 {
-    unsigned long currentMillis = millis(); 
+    unsigned long currentMillis = millis();
 
   for (uint8_t i = 0; i < totalInputs; i++)
   {
     boolean newState = mcp.digitalRead(inputs[i].gpio);
- // اگر تغییری در وضعیت رخ داده باشد
+
     if (newState != inputs[i].state) {
-      
-      // بررسی زمان debounce
+
+
       if (currentMillis - inputs[i].lastTrigger >= SENSOR_DEBOUNCE_DELAY) {
-        
+
         inputs[i].lastTrigger = currentMillis;
         inputs[i].state = newState;
-        
-        Serial.printf("Sensor%d changed - old state:%d new state:%d\n", 
+
+        Serial.printf("Sensor%d changed - old state:%d new state:%d\n",
                       i+1, !newState, newState);
 
-        // ارسال گزارش در صورت اتصال MQTT 
+
         if (mqtt_connected) {
           DynamicJsonDocument doc(64);
           doc["mac"] = mac;
           doc["event"] = "report";
           doc["iSt"] = createInArray();
-          
+
           String result;
           serializeJson(doc, result);
           Serial.println(result);
-          
+
           publishReport(result.c_str());
         }
       }
@@ -3012,22 +2954,7 @@ void readAnalogs()
     publishReport(result.c_str());
   }
 }
-// void checkPump() {
-//   for (uint8_t i = 0; i < totalInputs; i++) {
-//     if (inputs[i].value.charAt(0) == 'p') {
-//       uint8_t out = inputs[i].out;
-//       if (digitalRead(inputs[i].gpio) == HIGH) {
-//         // digitalWrite(outputs[out].gpio, LOW);
-//         switchRelay(out, LOW);
-
-//       } else {
-//         // digitalWrite(outputs[out].gpio, HIGH);
-//         switchRelay(out, HIGH);
-//       }
-//     }
-//   }
-// }
-
+# 3031 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 void checkRfRemote()
 {
 
@@ -3061,7 +2988,7 @@ void checkRfRemote()
 void readButton()
 {
   button.update();
-  // read the state of the switch/button:
+
   if (button.pressed())
   {
 
@@ -3100,23 +3027,7 @@ void handleShortPress()
 {
   Serial.println("short press");
   removeAllRemotes();
-  // if (alerting) {
-  //   for (uint8_t i = 0; i < totalInputs; i++) {
-  //     if (inputs[i].value.charAt(0) == 's') {
-  //       uint8_t out = inputs[i].out;
-
-  //       if (digitalRead(outputs[out].gpio) == LOW) {
-  //         switchRelay(out, HIGH);
-
-  //         continue;
-  //       }
-  //     }
-  //   }
-  //   alerting = false;
-
-  //   String text = "آژیر دزدگیر خاموش شد ";
-  //   ReplyHex(text, phoneNo[0]);
-  // }
+# 3120 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 }
 void handleRemoteRegister()
 {
@@ -3153,14 +3064,14 @@ void handleRemoteRegister()
           Serial.print("bit ");
           Serial.print("Protocol: ");
           Serial.println(mySwitch.getReceivedProtocol());
-          // save remote
-          // value = String(relaysCount) + value;
+
+
           Serial.println(value);
 
           saveRemoteCode(value.c_str(), relaysCount);
           delay(500);
 
-          //
+
         }
 
         mySwitch.resetAvailable();
@@ -3177,18 +3088,18 @@ void handleRemoteRegister()
 }
 void saveRemoteCode(const char *code, uint16_t out)
 {
-  const char *filePath = "/remotes.txt"; // File to store remote codes
+  const char *filePath = "/remotes.txt";
 
-  // Read existing codes from the file
+
   String fileContent = readFile(LittleFS, filePath);
-  // Check if the code already exists
+
   if (fileContent.indexOf(code) != -1)
   {
     Serial.println("Code already exists!");
     return;
   }
 
-  // Append the new code to the file
+
 
   fileContent += String(out) + String(code) + "\n";
 
@@ -3197,24 +3108,7 @@ void saveRemoteCode(const char *code, uint16_t out)
   Serial.print("Saved code: ");
   Serial.println(code);
 }
-// void saveRemoteCode(const char *code, uint16_t out) {
-//   for (int i = 0; i < totalRemotes; i++) {  // Example: limit to 10 codes
-//     String codeKey = "r" + String(i);
-//     if (REMOTES.getString(codeKey.c_str()).substring(1).indexOf(code + 1) != -1) {
-//       Serial.print("Code already exists!");
-//       break;
-//     }
-//     if (!REMOTES.isKey(codeKey.c_str())) {
-//       REMOTES.putString(codeKey.c_str(), code);
-//       remoteCount = remoteCount + 1;
-//       Serial.print("Saved code: ");
-//       Serial.println(code);
-//       delay(800);
-//       break;
-//     }
-//   }
-// }
-
+# 3218 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 void handleRemoveRemote()
 {
   Serial.println("very long press");
@@ -3246,12 +3140,12 @@ void handleRemoveRemote()
         Serial.print("bit ");
         Serial.print("Protocol: ");
         Serial.println(mySwitch.getReceivedProtocol());
-        // save remote
+
 
         removeRemoteCode(value.c_str());
         relaysCount = relaysCount + 1;
         delay(500);
-        //
+
       }
 
       mySwitch.resetAvailable();
@@ -3266,12 +3160,12 @@ void handleRemoveRemote()
 
 void removeAllRemotes()
 {
-  const char *filePath = "/remotes.txt"; // File where remote codes are stored
+  const char *filePath = "/remotes.txt";
 
-  // Check if the file exists
+
   if (LittleFS.exists(filePath))
   {
-    // Remove the file
+
     if (LittleFS.remove(filePath))
     {
       Serial.println("All remotes removed successfully!");
@@ -3287,7 +3181,7 @@ void removeAllRemotes()
     Serial.println("No remotes file found to remove!");
   }
 
-  // Optionally, recreate an empty file
+
   File file = LittleFS.open(filePath, FILE_WRITE);
   if (file)
   {
@@ -3301,9 +3195,9 @@ void removeAllRemotes()
 }
 void removeRemoteCode(const char *code)
 {
-  const char *filePath = "/remotes.txt"; // File where remote codes are stored
+  const char *filePath = "/remotes.txt";
 
-  // Read the file content
+
   String fileContent = readFile(LittleFS, filePath);
 
   if (fileContent.isEmpty())
@@ -3312,7 +3206,7 @@ void removeRemoteCode(const char *code)
     return;
   }
 
-  // Split the file content into lines and rebuild it without the specified code
+
   String newContent = "";
   int lineStart = 0;
   bool codeFound = false;
@@ -3345,7 +3239,7 @@ void removeRemoteCode(const char *code)
 
   if (codeFound)
   {
-    // Write the updated content back to the file
+
     writeFile(LittleFS, filePath, newContent.c_str());
     Serial.println("Remote code removed successfully!");
   }
@@ -3354,30 +3248,13 @@ void removeRemoteCode(const char *code)
     Serial.println("Remote code not found!");
   }
 }
-// void removeRemoteCode(const char *code) {
-
-//   // Check if the code exists in preferences
-//   for (int i = 0; i < totalRemotes; i++) {  // Example: limit to 10 codes
-//     String codeKey = "r" + String(i);
-
-//     if (REMOTES.getString(codeKey.c_str()).substring(1) == code) {
-//       REMOTES.remove(codeKey.c_str());
-//       Serial.print("Remote Deleted!");
-//       remoteCount = remoteCount - 1;
-//       delay(800);
-//       return;
-//     }
-//   }
-//   Serial.print("Not exist!");
-//   return;
-// }
-
+# 3375 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 void compareRemote(String received)
 {
 
-  const char *filePath = "/remotes.txt"; // File where remote codes are stored
+  const char *filePath = "/remotes.txt";
 
-  // Read the file content
+
   String fileContent = readFile(LittleFS, filePath);
 
   if (fileContent.isEmpty())
@@ -3386,7 +3263,7 @@ void compareRemote(String received)
     return;
   }
 
-  // Split the file content into lines and compare each line
+
   int lineStart = 0;
   while (lineStart < fileContent.length())
   {
@@ -3411,7 +3288,7 @@ void compareRemote(String received)
       Serial.print("Relay index: ");
       Serial.println(index);
 
-      // Perform the desired action for the matched remote
+
       boolean state = mcp.digitalRead(outputs[index].gpio);
       switchRelay(index, !state, 0, false);
 
@@ -3423,85 +3300,10 @@ void compareRemote(String received)
 
   Serial.println("Remote not registered!");
 }
-// void compareRemote(String received) {
-//   if (remoteCount == 0) {
-//     Serial.println("remote not registered!");
-//     return;
-//   }
-//   lasetRvalue = received;
-
-//   // for (int i = 0; i < remoteCount; i++) {
-//   // Check if the code exists in preferences
-//   for (int i = 0; i < totalRemotes; i++) {  // Example: limit to 10 codes
-//     String codeKey = "r" + String(i);
-//     String value = REMOTES.getString(codeKey.c_str());
-//     if (value.substring(1) == received) {
-//       uint8_t index = value.substring(0, 1).toInt();
-//       if (index == 0 && alerting) {
-//         // check for silent security
-//         // for (uint8_t i = 0; i < totalInputs; i++) {
-//         //   if (!inputs[i].value.isEmpty()) {
-//         //     switchRelay(i, HIGH);
-
-//         //     alerting = false;
-//         //     digitalWrite(STATUS_LED, LOW);
-//         //     securityMode = false;
-//         //     continue;
-//         //   }
-//         // }
-//         String text = "آژیر دزدگیر خاموش شد ";
-//         ReplyHex(text, phoneNo[0]);
-//         return;
-//       }
-
-//       Serial.println("value of key");
-//       Serial.println(index);
-//       if (lasetRvalue == received && now >= prevRfTime + 500 && now < prevRfTime + 1000) {
-//         Serial.print("RF Long Pressed! ");
-//         prevRfTime = millis();
-//         // if (index == 0 && !alerting && !securityMode) {
-//         //   for (uint8_t i = 0; i < totalInputs; i++) {
-//         //     if (inputs[i].value.charAt(0) == 's') {
-//         //       digitalWrite(STATUS_LED, HIGH);
-//         //       securityMode = true;
-//         //       return;
-//         //     }
-//         //   }
-//         // } else if (index == 1 && !alerting && securityMode) {
-//         //   digitalWrite(STATUS_LED, LOW);
-//         //   securityMode = false;
-//         // }
-//         return;
-//       }
-
-//       prevRfTime = millis();
-//       // check for silent security
-//       // for (uint8_t i = 0; i < totalInputs; i++) {
-//       //   if (inputs[i].out == index) {
-//       //     Serial.println("prg is active!");
-
-//       //     return;
-//       //   }
-//       // }
-//       if (index <= totalOutputs && outputs[index].timer.isEmpty()) {
-//         boolean state = digitalRead(outputs[index].gpio);
-//         // digitalWrite(outputs[index].gpio, !state);
-//         switchRelay(index, !state, 0, false);
-
-//         Serial.println("Code is Correct!");
-//       } else {
-//         Serial.println("timer is active!");
-//       }
-
-//       // remoteFlag = 1;
-//       return;
-//     }
-//   }
-// }
-
+# 3502 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 void initSim800Mqtt()
 {
-  // Connect to GPRS
+
 
   Serial.println(mqtt_connected);
   if (mqtt_connected)
@@ -3527,7 +3329,7 @@ void initSim800Mqtt()
   {
     Serial.println("GPRS is not connected");
   }
-  // Set up MQTT
+
 }
 
 void setupGSM()
@@ -3555,11 +3357,11 @@ void setupGSM()
 void initSms()
 {
 
-  // delay(3000);
+
 
   getSignalQuality(false);
 
-  // getOperator(false);
+
 
   readyForSms();
 
@@ -3615,7 +3417,7 @@ String WaitForResponse(String response)
 
 bool checkSim()
 {
-  // SimStatus result = modem.getSimStatus();
+
   String result = SendShortCommand("AT", "");
   delay(1000);
   Serial.println("result:");
@@ -3633,29 +3435,13 @@ bool checkSim()
     simInserted = false;
     return false;
   }
-  // if (result == 1)
-  // {
-  //   simInserted = true;
-  //   Serial.println("SIM is Ready");
-  //   return true;
-  // }
-  // else if (result == 2)
-  // {
-  //   Serial.println("SIM is locked");
-  //   simInserted = false;
-  //   return false;
-  // }
-  // else if (result != 1)
-  // {
-  //   simInserted = false;
-  //   return false;
-  // }
+# 3653 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 }
 
 void getOperator(bool report)
 {
   String result = modem.getOperator();
-  //  SendShortCommand("AT+COPS?");
+
   String newValue = "";
   if (result.indexOf("43235") != -1)
   {
@@ -3687,7 +3473,7 @@ void getOperator(bool report)
     Serial.println(result);
     publishReport(result.c_str());
 
-    // mqtt.publish("action_server", result.c_str());
+
   }
   op = newValue;
 
@@ -3714,7 +3500,7 @@ void getSignalQuality(bool report)
     String result;
     serializeJson(doc, result);
     Serial.println(result);
-    // mqtt.publish("action_server", result.c_str());
+
     publishReport(result.c_str());
   }
   updateSignalDisp();
@@ -3730,9 +3516,9 @@ void getSignalQuality(bool report)
 }
 void blinkLed()
 {
-  // digitalWrite(BUILTIN_LED, HIGH);
+
   delay(100);
-  // digitalWrite(BUILTIN_LED, LOW);
+
 }
 
 void GsmSoftReset()
@@ -3756,65 +3542,12 @@ void GsmReset()
 
 void checkOutputSch(uint8_t input)
 {
-  // if (inputs[input].value != "") {
-  // inputFlag[input] = 1;
-
-  // pump mode
-  // if (inputs[input].value.charAt(0) == 'p') {
-  //   uint8_t out = inputs[input].out;
-
-  //   if (digitalRead(inputs[input].gpio) == HIGH) {
-  //     digitalWrite(outputs[out].gpio, LOW);
-  //   } else {
-  //     digitalWrite(outputs[out].gpio, HIGH);
-  //   }
-  //   // setRealy(relays[out], 0);
-  //   Serial.println("pump");
-  //   // Serial.print(out);
-  // }
-  // security mode
-  // if (inputs[input].value.charAt(0) == 's' && securityMode) {
-  //   alerting = true;
-  //   uint8_t out = inputs[input].out;
-  //   Serial.println("security mode->alerting");
-  //   // digitalWrite(outputs[out].gpio, LOW);
-  //   switchRelay(out, LOW);
-  //   alertDisplay();
-
-  //   // setRealy(relays[out], 0);
-  //   String text = " هشدار! سنسور";
-  //   if (inputs[input].label.isEmpty()) {
-  //     text = text + (String(input + 1)) + " تحریک شده است";
-  //   } else {
-  //     text = text + (inputs[input].label) + " تحریک شده است";
-  //   }
-  //   if (mqtt_connected) {
-  //     String report = prepareDbData("feedback");
-  //     mqtt.publish("action_server", report.c_str());
-  //   }
-  //   if (phoneNo[0] != "") {
-  //     ReplyHex(text, phoneNo[0]);
-  //     if (callOnAlert) {
-  //       callAdmin();
-  //     }
-  //   }
-  //   Serial.print("security alerted");
-  // }
-  // temp mode
-  // if (inputs[input].value.charAt(0) != "t") {
-  //   int out = inputs[input].substring(1, 3).toInt() - 1;
-  //   // setRealy(relays[out], 0);
-  //   digitalWrite(relays[out], LOW);
-
-  //   debugPrint("temp mode :");
-  //   Serial.print(out);
-  // }
-  // }
+# 3813 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 }
 
 String addScenario(String val)
 {
-   // پیدا کردن اولین جای خالی
+
   int freeIndex = -1;
   for (int i = 0; i < totalScenarios; i++) {
     if (scenarios[i].value.isEmpty()) {
@@ -3830,7 +3563,7 @@ String addScenario(String val)
     String key = "s" + String(freeIndex + 1);
     writeDateTimeEEPROM(key.c_str(), val);
     scenariosCount = 0;
-    // شمارش مجدد سناریوهای فعال
+
     for (int i = 0; i < totalScenarios; i++) {
       if (!scenarios[i].value.isEmpty()) scenariosCount++;
     }
@@ -3850,25 +3583,25 @@ void removeScenario(const char *key)
   {
     if (strcmp(key, scenarios[i].key) == 0)
     {
-      // حذف سناریو
+
       for (int j = i; j < totalScenarios - 1; j++)
       {
         scenarios[j] = scenarios[j + 1];
-        // به‌روزرسانی کلید
+
         String newKey = "s" + String(j + 1);
         strncpy(scenarios[j].key, newKey.c_str(), sizeof(scenarios[j].key) - 1);
         scenarios[j].key[sizeof(scenarios[j].key) - 1] = '\0';
-        // همچنین مقدار را در EEPROM جابجا کن
+
         writeDateTimeEEPROM(newKey.c_str(), scenarios[j].value);
       }
-      // پاک کردن آخرین سناریو
+
       scenarios[totalScenarios - 1].value = "";
       String lastKey = "s" + String(totalScenarios);
       writeToEEPROM(lastKey.c_str(), "");
       break;
     }
   }
-  // شمارش مجدد سناریوهای فعال
+
   scenariosCount = 0;
   for (int i = 0; i < totalScenarios; i++) {
     if (!scenarios[i].value.isEmpty()) scenariosCount++;
@@ -3881,32 +3614,32 @@ void removeScenario(const char *key)
 
 void readyForSms()
 {
-  // delay(1000);
-  // Serial2.println("AT+CMGF=1\r");  //SMS text mode
 
-  SendShortCommand("AT+CLIP=1\r", ""); // set caller id on
+
+
+  SendShortCommand("AT+CLIP=1\r", "");
   delay(500);
   SendShortCommand("AT+CMGF=1", "");
 
-  // delay(500);
+
 
   if (op == "irancell")
   {
-    // Serial2.println("AT+CSMP=17,167,0,0");
+
     SendShortCommand("AT+CSMP=17,167,0,0", "");
 
     delay(500);
   }
-  // delete all sms
-  //  Serial2.println("AT+CMGD=1,4");
+
+
   SendShortCommand("AT+CMGD=1,4", "");
 
   delay(1000);
 
-  // Serial2.println("AT+CMGDA= \"DEL ALL\"");
+
   SendShortCommand("AT+CMGDA= \"DEL ALL\"", "");
 
-  // delay(1000);
+
   smsIsReady = true;
 }
 
@@ -3914,7 +3647,7 @@ void receiveSms()
 {
   uint8_t index = 0;
   String result = "";
-  // delay(2000);
+
   while (index < 3)
   {
     index++;
@@ -3924,7 +3657,7 @@ void receiveSms()
       delay(500);
       SendShortCommand("AT+CSCS=\"GSM\"", "");
 
-      // Serial2.print("AT+CSCS=\"GSM\"\r");
+
       delay(500);
       SendShortCommand("AT+CSMP=17,167,0,0", "");
       break;
@@ -3935,12 +3668,12 @@ void receiveSms()
     }
   }
 
-  // SendShortCommand("AT+CSCS=?", "");
 
-  // Serial2.println("AT+CMGF=1\r"); // SMS text mode
 
-  // Serial2.println("AT+CSMP=17,167,0,0");
-  // delay(1000);
+
+
+
+
 }
 
 void getGsmDateTime()
@@ -3948,58 +3681,58 @@ void getGsmDateTime()
   if (deviceYear < 20)
   {
     String result;
-    // digitalWrite(BUILTIN_LED, HIGH);
+
     delay(1000);
     if (op == "irancell")
     {
-      // Serial2.println("AT+SAPBR=3,1, \"Contype\",\"GPRS\"\r\n");
-      SendShortCommand("AT+SAPBR=3,1, \"Contype\",\"GPRS\"", "");
-      // delay(3000);
-      // Serial2.println("AT+SAPBR=3,1, \"APN\",\"CMNET\"\r\n");
-      SendShortCommand("AT+SAPBR=3,1, \"APN\",\"CMNET\"", "");
-      // delay(3000);
-      // readSerial();
-      // Serial2.println("AT+SAPBR=1,1\r\n");
-      SendShortCommand("AT+SAPBR=1,1", "");
-      // delay(1000);
-      // readSerial();
-      // Serial2.println("AT+CNTPCID=1\r\n");
-      SendShortCommand("AT+CNTPCID=1", "");
-      // delay(3000);
-      // Serial2.println("AT+CNTP=\"3.asia.pool.ntp.org\",14\r\n");
-      SendShortCommand("AT+CNTP=\"3.asia.pool.ntp.org\",14", "");
-      // readSerial();
 
-      // delay(1000);
-      // Serial2.println("AT+CNTP\r\n");
+      SendShortCommand("AT+SAPBR=3,1, \"Contype\",\"GPRS\"", "");
+
+
+      SendShortCommand("AT+SAPBR=3,1, \"APN\",\"CMNET\"", "");
+
+
+
+      SendShortCommand("AT+SAPBR=1,1", "");
+
+
+
+      SendShortCommand("AT+CNTPCID=1", "");
+
+
+      SendShortCommand("AT+CNTP=\"3.asia.pool.ntp.org\",14", "");
+
+
+
+
       SendShortCommand("AT+CNTP", "");
-      // readSerial();
+
       delay(500);
-      // Serial2.println("AT+CCLK?\r\n");
+
       result = SendShortCommand("AT+CCLK?", "+CCLK");
 
-      // readSerial();
+
       delay(1000);
-      // Serial2.println("AT+SAPBR=0,1\r\n");
+
       SendShortCommand("AT+SAPBR=0,1", "");
     }
     else if (op == "mci")
     {
       Serial2.println("AT+CLTS=1\r");
-      // readSerial();
+
       delay(500);
       Serial2.println("AT+COPS=0\r");
-      // readSerial();
+
       delay(500);
-      // readSerial();
-      // Serial2.println("AT+CCLK?\r");
+
+
       result = SendShortCommand("AT+CCLK?", "+CCLK");
       delay(1000);
-      // readSerial();
+
     }
 
-    //+CCLK: "24/07/06,19:07:09+32"
-    //+CCLK: "24/07/06,19:09:38+14"
+
+
 
     if (result.indexOf("+CCLK") != -1)
     {
@@ -4014,13 +3747,13 @@ void getGsmDateTime()
     }
   }
 }
-/*******************************************************************************
- * parseData function:
- * this function parse the incomming command such as CMTI or CMGR etc.
- * if the sms is received. then this function read that sms and then pass
- * that sms to "extractSms" function. Then "extractSms" function divide the
- * sms into parts. such as sender_phone, sms_body, received_date etc.
- ******************************************************************************/
+
+
+
+
+
+
+
 uint8_t smsIndex = 0;
 
 void parseData(String buff)
@@ -4028,18 +3761,18 @@ void parseData(String buff)
   Serial.println("buffer =>");
   Serial.println(buff);
 
-  // buffer = buff;
+
 
   unsigned int len, index;
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-  // Remove sent "AT Command" from the response string.
+
+
   index = buff.indexOf("\r");
   buff.remove(0, index + 2);
   buff.trim();
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM RING ANSWER
+
+
 
   if (buff.indexOf("+CLIP") != -1)
   {
@@ -4060,7 +3793,7 @@ void parseData(String buff)
     hangUp();
     return;
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM RING ANSWER
+
 
   if (buff != "OK")
   {
@@ -4068,8 +3801,8 @@ void parseData(String buff)
     String cmd = buff.substring(0, index);
     cmd.trim();
     buff.remove(0, index + 2);
-    // Serial.println("cmd==>");
-    // Serial.print(cmd);
+
+
 
     if (buff == "ERROR" && smsIndex > 0)
     {
@@ -4078,52 +3811,17 @@ void parseData(String buff)
       Serial.println(smsIndex);
       String temp = "AT+CMGR=" + String(smsIndex) + "\r";
       delay(500);
-      // get the message stored at memory location "temp"
+
       Serial2.println(temp);
       return;
-      // signal quality
+
     }
-    //  else if (cmd == "+CSQ") {
-    //   uint8_t s;
-    //   if (!buff.isEmpty()) {
-    //     s = buff.substring(0, 2).toInt();
-    //   } else {
-    //     s = 99;
-    //   }
-    //   sig = String(s);
-    //   Serial.println("signal:");
-    //   Serial.println(s);
-    //   events.send(String(s).c_str(), "signal", now);
-    //   return;
-    // }
-    // else if (cmd == "+COPS") {
-
-    //   if (buff.indexOf("43235") != -1) {
-    //     op = "irancell";
-    //   } else if (buff.indexOf("TCI") != -1) {
-    //     op = "mci";
-    //   }
-    //   Serial.println("operator : ");
-    //   Serial.println(buff);
-    //   Serial.println(op);
-
-    // }
-    // else if (cmd == "+CCLK") {
-    //   //+CCLK: "24/07/06,19:07:09+32"
-    //   //+CCLK: "24/07/06,19:09:38+14"
-
-    //   int ind = buff.indexOf('"');
-    //   buff = buffer.substring(ind, buff.length());
-    //   Serial.println("buufer:::");
-    //   Serial.println(buff);
-    //   updateDate(buff);
-
-    // }
+# 4122 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
     else if (cmd == "+CPIN")
     {
       Serial.println("buufer==>");
       Serial.println(buff);
-      //+CPIN: READY
+
       int ind = buff.indexOf(':');
       buff = buffer.substring(ind + 1, buff.length());
       Serial.println("buufer:::");
@@ -4132,26 +3830,19 @@ void parseData(String buff)
 
     else if (cmd == "+CMTI")
     {
-
-      // hex => "REC UNREAD","2B393839313237393935383833","","24/09/07,19:47:46+18"
-      //  52346F6E
-
-      //"REC UNREAD","+989127995883","","24/09/07,19:56:18+18"
-      // R4on
-
-      // get newly arrived memory location and store it in temp
+# 4143 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
       index = buff.indexOf(",");
 
       String temp = buff.substring(index + 1, buff.length());
       smsIndex = temp.toInt();
       temp = "AT+CMGR=" + temp + "\r";
-      // get the message stored at memory location "temp"
+
       Serial2.println(temp);
-      // readSerial();
-      // delay(1000);
-      // if (buffer != "OK") {
-      //   Serial2.println(temp);
-      // }
+
+
+
+
+
     }
     else if (cmd == "+CPMS")
     {
@@ -4170,7 +3861,7 @@ void parseData(String buff)
             Serial.print("last sms index");
             Serial.println(smsIndex);
             String temp = "AT+CMGR=" + String(smsIndex - i) + "\r";
-            // get the message stored at memory location "temp"
+
             Serial2.println(temp);
           }
           smsIndex = 0;
@@ -4188,7 +3879,7 @@ void parseData(String buff)
     else if (cmd == "+CMGR")
     {
       extractSms(buff);
-      //----------------------------------------------------------------------------
+
       if (msg.equals("p") && phoneNo[0].length() == 13)
       {
         for (uint8_t i = 0; i < totalPhoneNo; i++)
@@ -4207,29 +3898,29 @@ void parseData(String buff)
       {
         writeToEEPROM(offsetPhone[0], senderNumber);
         phoneNo[0] = senderNumber;
-        // String text = "Number is Registered: ";
-        // text = text + senderNumber;
-        // debugPrint(text);
-        // String sms = "شماره شما بعنوان مدیر ثبت شد\n";
-        // sms = sms + "مدل دستگاه :";
-        // sms = sms + DEVICE_MODEL;
-        // ReplyHex(sms, senderNumber);
+
+
+
+
+
+
+
         String sms = "";
         sms = prepareSMSStats();
         debugPrint(sms);
         prepareData();
         ReplyHex(sms, senderNumber);
       }
-      //----------------------------------------------------------------------------
 
-      //----------------------------------------------------------------------------
+
+
       if (comparePhone(senderNumber))
       {
         doAction(senderNumber);
-        // delete all sms
+
       }
 
-      // receiveSms();
+
 
       Serial2.println("AT+CMGD=1,4");
       delay(1000);
@@ -4241,22 +3932,22 @@ void parseData(String buff)
         smsIndex = smsIndex - 1;
       }
     }
-    // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
   }
 }
 
 void extractUssd(String buff)
 {
-  int startIndex = buff.indexOf('"');                    // Find the first quote
-  int endIndex = buff.indexOf('"', startIndex + 1);      // Find the next quote after the first
-  String str = buff.substring(startIndex + 1, endIndex); // Extract between the quotes
+  int startIndex = buff.indexOf('"');
+  int endIndex = buff.indexOf('"', startIndex + 1);
+  String str = buff.substring(startIndex + 1, endIndex);
   Serial.println("sub str");
   Serial.println(str);
 
   ForwardHex(str, senderNumber);
 }
 
-// READ FROM SERIAL
+
 void readSerial()
 {
   unsigned long startTime = millis();
@@ -4277,25 +3968,14 @@ bool isRegistered()
   Serial.println("isRegistered :");
   Serial.println(gsmNetwork);
   return gsmNetwork;
-  // String result = SendShortCommand("AT+CREG?", "");
-  // (result.indexOf(F("+CREG: 0,2"))) != -1 ||
-  // if ((result.indexOf(F("+CREG: 0,1"))) != -1 || (result.indexOf(F("+CREG: 0,5"))) != -1 || (result.indexOf(F("+CREG: 1,1"))) != -1 || (result.indexOf(F("+CREG: 1,5"))) != -1)
-  // {
-  //   Serial.println("isRegistered =true");
-  //   return true;
-  // }
-  // else
-  // {
-  //   Serial.println("isRegistered =false");
-  //   return false;
-  // }
+# 4292 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 }
 
-/*******************************************************************************
- * extractSms function:
- * This function divide the sms into parts. such as sender_phone, sms_body,
- * received_date etc.
- ******************************************************************************/
+
+
+
+
+
 void extractSms(String buff)
 {
   unsigned int index;
@@ -4309,16 +3989,16 @@ void extractSms(String buff)
   receivedDate = buff.substring(0, 20);
   Serial.println("receive date =>");
   Serial.println(receivedDate);
-  // updateDate(receivedDate);
+
   if (deviceYear < 20)
   {
-    // receivedDate 24/09/01,17:40:29+18
+
     receivedDate = "\"" + receivedDate + "\"";
     updateDate(receivedDate);
   }
   else
   {
-    // digitalWrite(BUILTIN_LED, HIGH);
+
   }
   buff.remove(0, buff.indexOf("\r"));
   buff.trim();
@@ -4330,7 +4010,7 @@ void extractSms(String buff)
   buff = "";
   msg.toLowerCase();
 
-  // Check if the resulting UTF-8 string is valid
+
   if (isDigit(msg.charAt(0)) && isDigit(msg.charAt(1)))
   {
 
@@ -4340,9 +4020,9 @@ void extractSms(String buff)
     msg.toLowerCase();
 
     Serial.println("The converted string is valid UTF-8:");
-    // Serial.println(utf8String);
 
-    // if (isValidUTF8((const uint8_t *)utf8String.c_str(), utf8String.length())) {
+
+
   }
   else
   {
@@ -4350,7 +4030,7 @@ void extractSms(String buff)
   }
   smsDisplay();
 
-  // NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
+
   String tempcmd = msg.substring(0, 3);
 
   if (tempcmd.equals("p1=") || tempcmd.equals("p2=") || tempcmd.equals("p3=") || tempcmd.equals("p4=") || tempcmd.equals("p5="))
@@ -4384,7 +4064,7 @@ void extractSms(String buff)
   }
   else if (tempcmd.indexOf("l") != -1 && tempcmd.indexOf("=") != -1)
   {
-    // tempcmd.equals("al=") || tempcmd.equals("bl=") || tempcmd.equals("cl=") || tempcmd.equals("dl=")) {
+
     tempLabel = msg.substring(3, 23);
     msg = tempcmd;
     debugPrint(tempLabel);
@@ -4392,7 +4072,7 @@ void extractSms(String buff)
   }
   else if (tempcmd.indexOf("n") != -1 && tempcmd.indexOf("=") != -1)
   {
-    // tempcmd.equals("al=") || tempcmd.equals("bl=") || tempcmd.equals("cl=") || tempcmd.equals("dl=")) {
+
     tempLabel = msg.substring(3, 23);
     msg = tempcmd;
     debugPrint(tempLabel);
@@ -4400,17 +4080,17 @@ void extractSms(String buff)
   }
   else if (tempcmd.equals("s"))
   {
-    // msg = tempcmd;
+
     debugPrint(msg);
   }
-  // NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
+
 }
 
-// MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-// Calls when receive sms ad extract time and set rtc timer
+
+
 void updateDate(String dateTime)
 {
-  // if (
+
   Serial.println("date =>");
   Serial.println(dateTime);
 
@@ -4431,12 +4111,12 @@ void updateDate(String dateTime)
 
   deviceYear = year;
 
-  // String text = "خطا در دریافت تاریخ و زمان رخ داده، لطفا برای اصلاح تاریخ یک پیام ارسال نمایید";
-  // ReplyHex(text,phoneNo[0]);
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 
-  rtc.setTime(0, minute, hour, day, month, (2000 + year)); // 17th Jan 2021 15:24:30
+
+
+
+  rtc.setTime(0, minute, hour, day, month, (2000 + year));
 
   checkTasks();
   Serial.println("rtc time");
@@ -4456,16 +4136,16 @@ void checkSmsHistory()
 
 void checkTasks()
 {
-  // Serial.println("refreshed time =>");
-  // Serial.println(rtc.getDateTime(true));
+
+
 
   uint8_t dayOfWeek = rtc.getDayofWeek();
   uint8_t hour = rtc.getHour(true);
   uint8_t minute = rtc.getMinute();
   updateDisplay();
-  // count minutes
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-  //  one hour
+
+
+
   if (minCounter >= 60)
   {
     minCounter = 0;
@@ -4487,11 +4167,11 @@ void checkTasks()
       }
       else
       {
-        // if (mqtt_connected)
-        // {
-        //   String report = prepareDbData("report");
-        //   publishReport(report.c_str());
-        // }
+
+
+
+
+
       }
     }
     else if (ssid != "" && password != "" && wifiTryCount < 2)
@@ -4505,15 +4185,15 @@ void checkTasks()
         setupGSM();
       }
 
-      /// clear sms storage
+
       checkSmsHistory();
     }
     else
     {
-      // if (checkSim())
-      // {
-      //   setupGSM();
-      // }
+
+
+
+
     }
   }
 
@@ -4526,7 +4206,7 @@ void checkTasks()
   }
   if (minCounter % 2 == 0)
   {
-    /// if has borker registered
+
 
     if (gsmNetwork)
     {
@@ -4542,7 +4222,7 @@ void checkTasks()
     }
     else
     {
-      // checkSim();
+
     }
 
     if (hasWifi && !mqtt_connected)
@@ -4567,10 +4247,10 @@ void checkTasks()
       }
     }
   }
-  // if (mqtt_connected) {
-  //   String result = prepareDbData("report");
-  //   mqtt.publish("action_server", result.c_str());
-  // }
+
+
+
+
 
   sensors.requestTemperatures();
   bool flag = false;
@@ -4584,7 +4264,7 @@ void checkTasks()
     temps[i].temp = t;
   }
 
-  /// send mqtt if threshold temp trigged
+
   if (flag)
   {
     if (mqtt_connected)
@@ -4607,20 +4287,20 @@ void checkTasks()
 
   minCounter = minCounter + 1;
 
-  // check relays schedules
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+
   for (uint8_t i = 0; i < totalOutputs; i++)
   {
-    // format : 0123456/06:3013:00
-    // if (outputs[i].timer.charAt(0) != 't') {
-    //   toggleTimers[i] = -1;
-    // }
+
+
+
+
 
     if (outputs[i].timer.length() == 18)
     {
       if (outputs[i].timer.substring(0, 7).indexOf(String(dayOfWeek)) != -1)
       {
-        // begin time
+
         int startH = outputs[i].timer.substring(8, 10).toInt();
         int startM = outputs[i].timer.substring(11, 13).toInt();
         int endH = outputs[i].timer.substring(13, 15).toInt();
@@ -4638,45 +4318,45 @@ void checkTasks()
                 {
                   if (minute < endM)
                   {
-                    // digitalWrite(outputs[i].gpio, LOW);
+
                     switchRelay(i, LOW, 0, false);
-                    // Serial.print(i + 1);
-                    // Serial.println("is on ");
+
+
                   }
                   else
                   {
-                    // digitalWrite(outputs[i].gpio, HIGH);
+
 
                     switchRelay(i, HIGH, 0, false);
 
-                    // Serial.print(i + 1);
-                    // Serial.println("is off ");
+
+
                     continue;
                   }
                 }
                 if (hour < endH)
                 {
-                  // digitalWrite(outputs[i].gpio, LOW);
+
                   switchRelay(i, LOW, 0, false);
 
-                  // Serial.print(i + 1);
-                  // Serial.println("is on ");
+
+
 
                   continue;
                 }
               }
               else
               {
-                // digitalWrite(outputs[i].gpio, HIGH);
+
                 switchRelay(i, HIGH, 0, false);
 
-                // Serial.print(i + 1);
-                // Serial.println("is off ");
+
+
               }
             }
             else
             {
-              // Serial.println("return");
+
               continue;
             }
           }
@@ -4688,35 +4368,35 @@ void checkTasks()
               {
                 if (minute < endM)
                 {
-                  // digitalWrite(outputs[i].gpio, LOW);
+
                   switchRelay(i, LOW, 0, false);
-                  // Serial.print(i + 1);
-                  // Serial.println("is on ");
+
+
                 }
                 else
                 {
-                  // digitalWrite(outputs[i].gpio, HIGH);
+
                   switchRelay(i, HIGH, 0, false);
-                  // Serial.print(i + 1);
-                  // Serial.println("is off ");
+
+
                   continue;
                 }
               }
               if (hour < endH)
               {
-                // digitalWrite(outputs[i].gpio, LOW);
+
                 switchRelay(i, LOW, 0, false);
-                // Serial.print(i + 1);
-                // Serial.println("is on ");
+
+
                 continue;
               }
             }
             else
             {
-              // digitalWrite(outputs[i].gpio, HIGH);
+
               switchRelay(i, HIGH, 0, false);
-              // Serial.print(i + 1);
-              // Serial.println("is off ");
+
+
             }
           }
         }
@@ -4724,22 +4404,22 @@ void checkTasks()
     }
     else if (outputs[i].timer.length() == 16)
     {
-      // format : 0123456/06/03:00
+
       if ((outputs[i].timer.substring(0, 7).indexOf(String(dayOfWeek)) != -1))
       {
-        // begin time
+
         int perHour = outputs[i].timer.substring(8, 10).toInt();
         int h = outputs[i].timer.substring(11, 13).toInt();
         int m = outputs[i].timer.substring(14, 16).toInt();
         uint t;
         if (perHour <= 0)
         {
-          // Serial.print("perHour must at least 1 ");
+
           return;
         }
         if (m <= 0)
         {
-          // Serial.print("m must grater than 0 ");
+
           return;
         }
         if (24 % perHour == 0)
@@ -4748,35 +4428,35 @@ void checkTasks()
         }
         else
         {
-          // Serial.print("perHour not divide by 24");
+
           return;
         }
         if (h >= perHour)
         {
-          // Serial.print("on hours bigger than perHour");
+
           return;
         }
 
         for (int j = 0; j <= t; j++)
         {
-          uint8_t cycleStart = (j + 1) * perHour;  // j = 6 => 12
-          uint8_t cycleEnd = cycleStart + perHour; // 12 +2 =>14
+          uint8_t cycleStart = (j + 1) * perHour;
+          uint8_t cycleEnd = cycleStart + perHour;
           if (hour >= cycleStart && hour < cycleEnd)
           {
-            // current hour is in this cylcle
+
             uint16_t onMTime = (h * 60) + m;
             uint16_t passed = ((hour - cycleStart) * 60) + minute;
 
             if (passed <= onMTime)
             {
-              // digitalWrite(outputs[i].gpio, LOW);
+
               switchRelay(i, LOW, 0, false);
               Serial.print(i + 1);
               Serial.println(" sch is on ");
             }
             else
             {
-              // digitalWrite(outputs[i].gpio, HIGH);
+
               switchRelay(i, HIGH, 0, false);
               Serial.print(i + 1);
               Serial.println(" sch is off ");
@@ -4801,7 +4481,7 @@ void checkTasks()
         if (toggleTimers[i] > toggle)
         {
           toggleTimers[i] = toggleTimers[i] - 1;
-          // digitalWrite(outputs[i].gpio, LOW);
+
           switchRelay(i, LOW, 0, false);
           Serial.println("toggleTimers[i] > toggle");
           Serial.println(toggleTimers[i]);
@@ -4809,7 +4489,7 @@ void checkTasks()
         else if (toggleTimers[i] > 0 && toggleTimers[i] <= toggle)
         {
           toggleTimers[i] = toggleTimers[i] - 1;
-          // digitalWrite(outputs[i].gpio, HIGH);
+
           switchRelay(i, HIGH, 0, false);
           Serial.println("toggleTimers[i] <= toggle");
           Serial.println(toggleTimers[i]);
@@ -4823,32 +4503,32 @@ void checkTasks()
     }
   }
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-  // getSignalQuality();
+
+
 }
 int avgIndex = 0;
 
 void setAverageElement()
 {
   Serial.println("setAverageElement");
-  /// Analogs Average
+
   for (uint8_t i = 0; i < totalAnalogs; i++)
   {
     analogInputs[i].buffer[(minCounter / 10) - 1] = analogInputs[i].voltage;
   }
-  /// Temps Average
+
   for (uint8_t i = 0; i < totalTemps; i++)
   {
     temps[i].buffer[(minCounter / 10) - 1] = temps[i].temp;
   }
-  /// Current Average
-  // currentAmp.buffer[(minCounter / 10) - 1] = currentAmp.value;
+
+
 }
 
 void createMovingAverage()
 {
   Serial.println("createMovingAverage");
-  /// Analogs Average
+
   for (uint8_t i = 0; i < totalAnalogs; i++)
   {
     float avg = 0;
@@ -4862,7 +4542,7 @@ void createMovingAverage()
     Serial.println("analog avg :");
     Serial.println(avg);
   }
-  /// Temps Average
+
   for (uint8_t i = 0; i < totalTemps; i++)
   {
     float avg = 0;
@@ -4876,20 +4556,10 @@ void createMovingAverage()
     Serial.println("temp avg :");
     Serial.println(avg);
   }
-  /// Current Average
-
-  // float avg = 0;
-  // for (int j = 0; j < WINDOW_SIZE; j++)
-  // {
-  //   avg += currentAmp.buffer[j];
-  // }
-  // avg /= WINDOW_SIZE;
-
-  // currentAmp.avg = (int)avg;
-
+# 4890 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   Serial.println("current avg :");
   Serial.println(currentAmp.value);
-  // reset energy consume
+
   currentAmp.value = 0.0;
 
   if (mqtt_connected)
@@ -4902,13 +4572,13 @@ void createMovingAverage()
 
 void saveLastRelayStates()
 {
-  // String rStates = STATE_RELAY_1 ? "1" : "0";
-  // rStates += STATE_RELAY_2 ? "1" : "0";
-  // rStates += STATE_RELAY_3 ? "1" : "0";
-  // rStates += STATE_RELAY_4 ? "1" : "0";
-  // writeDateTimeEEPROM(offsetStates, rStates);
-  // Serial.println("rStates saved");
-  // Serial.println(rStates);
+
+
+
+
+
+
+
 }
 
 void sendMqttFeedback()
@@ -4925,7 +4595,7 @@ void sendMqttFeedback()
     Serial.println(result);
     publishReport(result.c_str());
 
-    // Serial.println(outStates);
+
   }
   delay(200);
   updateStatesDSP();
@@ -4956,9 +4626,9 @@ void setPwm(uint8_t index, uint8_t percent)
     publishReport(result.c_str());
   }
 }
-/*******************************************************************************
- * Performs action according to the received sms
- ******************************************************************************/
+
+
+
 void clearTimer(uint8_t index)
 {
   writeDateTimeEEPROM(outputs[index].timerKey, "");
@@ -4966,67 +4636,14 @@ void clearTimer(uint8_t index)
   Serial.print("cleared timer ");
   Serial.println(index);
 }
-
-/**
- * @brief Handles various actions based on the received message (msg) and phone number.
- *
- * This function processes commands sent via SMS or other communication methods to control relays,
- * set labels, manage timers, configure settings, and more. It supports a wide range of commands
- * for interacting with the system's outputs, inputs, and configurations.
- *
- * @param phoneNumber The phone number associated with the received message.
- *
- * Commands:
- * - Relay Control:
- *   - "r1on", "r1off": Turns relay 1 on or off (similarly for other relays).
- *   - "stat": Retrieves the status of all relays.
- *   - "stat=1": Retrieves the status of relay 1 (similarly for other relays).
- * - Label Management:
- *   - "1l=pump": Sets the label of relay 1 to "pump" (similarly for other relays).
- *   - "labels": Retrieves the labels of all relays.
- *   - "n1=door": Sets the label of input 1 to "door" (similarly for other inputs).
- * - Phone Number Management:
- *   - "p1=09127995883": Registers a phone number for user 1 (similarly for other users).
- *   - "list": Lists all registered phone numbers.
- *   - "del=1": Deletes the phone number of user 1 (similarly for other users).
- *   - "del=all": Deletes all registered phone numbers.
- * - Timer Management:
- *   - "t1=10:00": Sets a timer for relay 1 (similarly for other relays).
- *   - "t1x": Clears the timer for relay 1 (similarly for other relays).
- *   - "sch": Lists all relay schedules.
- * - Temperature Monitoring:
- *   - "temp": Retrieves the current temperature readings from sensors.
- * - Security and Pump Control:
- *   - "son": Activates the security system.
- *   - "soff": Deactivates the security system.
- *   - "poff": Turns off the pump.
- * - Notifications:
- *   - "non": Enables device startup notifications.
- *   - "noff": Disables device startup notifications.
- * - System Settings:
- *   - "set": Retrieves the current system settings.
- *   - "wipe": Resets the device and clears memory.
- * - Remote Management:
- *   - "dr": Deletes all remote configurations.
- * - Call Alerts:
- *   - "callon": Enables call alerts.
- *   - "calloff": Disables call alerts.
- * - Balance Inquiry:
- *   - "balance": Requests the balance information from the operator.
- *
- * Notes:
- * - The function uses various helper functions such as `ReplyHex`, `switchRelay`, `writeToEEPROM`,
- *   `clearSmsVariables`, and others to perform specific tasks.
- * - Messages are parsed and processed based on specific patterns and keywords.
- * - The function includes localized responses in Persian for user feedback.
- */
+# 5023 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
 void doAction(String phoneNumber)
 {
 
-  // Switchs
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 
-  // r1on r1off
+
+
+
   if (msg.indexOf("r") != -1 && msg.length() > 3)
   {
     uint8_t out = msg.substring(1, 2).toInt() - 1;
@@ -5049,15 +4666,15 @@ void doAction(String phoneNumber)
     {
       clearSmsVariables();
       String text = "رله " + String(out + 1) + " در حالت سناریو قرار دارد ";
-      // String text = "رله " + String(out + 1) + " قفل و در حالت ";
-      // text = text + ((outPrg.charAt(0) == 's') ? "دزدگیر قرار دارد" : "پمپ قرار دارد");
+
+
       ReplyHex(text, phoneNumber);
       return;
     }
-    // digitalWrite(outputs[out].gpio, !state);
+
     switchRelay(out, !state, 0, false);
 
-    // STATE_RELAY_1 = state;
+
 
     Serial.print(out + 1);
     Serial.print("is ");
@@ -5087,8 +4704,8 @@ void doAction(String phoneNumber)
     events.send("refresh", NULL, millis());
   }
 
-  // 1l=pump
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+
   else if (msg.indexOf("l") != -1 && msg.indexOf("=") != -1)
   {
     uint8_t out = (msg.substring(1, 2).toInt()) - 1;
@@ -5100,7 +4717,7 @@ void doAction(String phoneNumber)
       ReplyHex(text, phoneNumber);
     }
   }
-  // Labels
+
 
   else if (msg == "labels")
   {
@@ -5115,7 +4732,7 @@ void doAction(String phoneNumber)
     debugPrint(text);
     ReplyHex(text, phoneNumber);
   }
-  // Input Labels
+
   else if (msg.indexOf("n") != -1 && msg.indexOf("=") != -1)
   {
     uint8_t in = (msg.substring(1, 2).toInt()) - 1;
@@ -5128,8 +4745,8 @@ void doAction(String phoneNumber)
     }
   }
 
-  // Stats
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+
   else if (msg.indexOf("stat=") != -1)
   {
     uint8_t out = msg.substring(msg.indexOf("=")).toInt() - 1;
@@ -5151,9 +4768,9 @@ void doAction(String phoneNumber)
     debugPrint(text);
     Reply(text, phoneNumber);
   }
-  // Phones
-  // p1=09127995883
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+
+
   else if (msg.indexOf("p") != -1 && msg.indexOf("=") != -1)
   {
     uint8_t index = (msg.substring(1, 2).toInt()) - 1;
@@ -5169,10 +4786,10 @@ void doAction(String phoneNumber)
     phoneNo[index] = tempPhone;
     String text = "شماره مدیر " + String(index + 1) + " با موفقیت ثبت شد";
     Serial.println("Number " + String(index + 1) + " is Registered");
-    // debugPrint(text);
+
     ReplyHex(text, phoneNumber);
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
   else if (msg == "list")
   {
     String text = "لیست کاربران";
@@ -5180,7 +4797,7 @@ void doAction(String phoneNumber)
     {
       if (!phoneNo[i].isEmpty())
       {
-        //+989127995883
+
         String phone = "0" + phoneNo[i].substring(3);
         if (i != (totalPhoneNo - 1))
         {
@@ -5192,7 +4809,7 @@ void doAction(String phoneNumber)
     debugPrint("List of Registered Phone Numbers: \r\n" + text);
     ReplyHex(text, phoneNumber);
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
 
   else if (msg.indexOf("del=") != -1)
   {
@@ -5203,7 +4820,7 @@ void doAction(String phoneNumber)
     ReplyHex("شماره کاربر " + String(index + 1) + "با موفقیت پاک شد", phoneNumber);
   }
 
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
   else if (msg == "del=all")
   {
     writeToEEPROM(offsetPhone[0], "");
@@ -5219,8 +4836,8 @@ void doAction(String phoneNumber)
     debugPrint("All phone numbers are deleted.");
     ReplyHex("همه شماره ها پاک شدند", phoneNumber);
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-  /// set timers
+
+
   else if (msg.indexOf("t") != -1 && msg.indexOf("=") != -1)
   {
     uint8_t index = (msg.substring(1, 2).toInt()) - 1;
@@ -5228,8 +4845,8 @@ void doAction(String phoneNumber)
     if (!outPrg.isEmpty())
     {
       String text = "رله " + String(index + 1) + " در حالت سناریو قرار دارد ";
-      // String text = "رله " + String(index + 1) + " قفل و در حالت ";
-      // text = text + ((outPrg.charAt(0) == 's') ? "دزدگیر قرار دارد" : "پمپ قرار دارد");
+
+
       ReplyHex(text, phoneNumber);
       return;
     }
@@ -5275,8 +4892,8 @@ void doAction(String phoneNumber)
     debugPrint("Relay " + String(index + 1) + " is Set :");
     debugPrint(tempSch);
   }
-  // set input program
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+
 
   else if (msg.indexOf("s") != -1 && msg.indexOf("=") != -1)
   {
@@ -5289,8 +4906,8 @@ void doAction(String phoneNumber)
     debugPrint("Input " + String(in + 1) + " is Set :");
     debugPrint(tempSch);
   }
-  // clear input program
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+
   else if (msg.indexOf("s") != -1 && msg.indexOf("x") != -1)
   {
     uint8_t in = (msg.substring(1, 2).toInt()) - 1;
@@ -5302,17 +4919,17 @@ void doAction(String phoneNumber)
   }
   else if (msg == "set")
   {
-    /// setting variables
-    //  callOnAlert = true;
-    //  securityMode = false;
-    //  notifyScenarios = true;
-    //  int remoteCount = 0;
+
+
+
+
+
     String text =
         "setting : " + String(callOnAlert) + "," + String(securityMode) + "," + String(notifyScenarios) + "," + String(remoteCount);
 
     ReplyHex(text, phoneNumber);
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
   else if (msg.indexOf("t") != -1 && msg.indexOf("x") != -1)
   {
     uint8_t out = (msg.substring(1, 2).toInt()) - 1;
@@ -5352,47 +4969,16 @@ void doAction(String phoneNumber)
     ReplyHex(text, phoneNumber);
     debugPrint(msg);
   }
-  // SECURITY & PUMP OFF
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
+
   else if (msg == "son")
   {
-    // bool flag = 0;
-    // for (uint8_t i = 0; i < totalInputs; i++) {
-    //   if (inputs[i].value.charAt(0) == 's') {
-    //     uint8_t out = inputs[i].out - 1;
-    //     flag = 1;
-    //   }
-    // }
-    // if (flag) {
-    //   securityMode = true;
-    //   digitalWrite(STATUS_LED, HIGH);
-    //   String text = "سیستم امنیتی فعال شد";
-    //   alertEnableDisplay();
-    //   ReplyHex(text, phoneNumber);
-    // }
+# 5373 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   }
   else if (msg == "soff")
   {
-    // bool flag = 0;
-    // for (uint8_t i = 0; totalInputs < 4; i++) {
-    //   if (inputs[i].value.charAt(0) == 's') {
-    //     uint8_t out = inputs[i].out - 1;
-
-    //     if (digitalRead(outputs[out].gpio) == LOW) {
-    //       flag = 1;
-    //       // digitalWrite(outputs[out].gpio, HIGH);
-    //       switchRelay(out, HIGH);
-    //     }
-    //   }
-    // }
-    // if (flag) {
-    //   securityMode = false;
-    //   digitalWrite(STATUS_LED, LOW);
-    //   String text = "هشدارهای سیستم امنیتی خاموش شدند";
-    //   ReplyHex(text, phoneNumber);
-    // }
-
-  } // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+# 5395 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
+  }
   else if (msg == "balance")
   {
     Serial.println("Charge Message Recieved!");
@@ -5426,28 +5012,14 @@ void doAction(String phoneNumber)
 
   else if (msg == "poff")
   {
-    // bool flag = 0;
-    // for (uint8_t i = 0; i < totalInputs; i++) {
-    //   if (inputs[i].value.charAt(0) == 'p') {
-    //     uint8_t out = inputs[i].out - 1;
-    //     flag = 1;
-    //     if (digitalRead(outputs[out].gpio) == LOW) {
-    //       // digitalWrite(outputs[out].gpio, HIGH);
-    //       switchRelay(out, HIGH);
-    //     }
-    //   }
-    // }
-    // if (flag) {
-    //   String text = "پمپ خاموش شد";
-    //   ReplyHex(text, phoneNumber);
-    // }
+# 5444 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   }
   else if (msg == "wipe")
   {
-    // write a 0 to all 512 bytes of the EEPROM
+
     Serial.println("restet called");
     EEPROM.clear();
-    // REMOTES.clear();
+
     removeAllRemotes();
     resetWifi();
     String text = "دستگاه ریست و حافظه پاک شد ";
@@ -5458,7 +5030,7 @@ void doAction(String phoneNumber)
   else if (msg == "dr")
   {
     Serial.print("Remote Saved!");
-    // REMOTES.clear();
+
     removeAllRemotes();
     String text = "همه ریموت ها پاک شدند";
     ReplyHex(text, phoneNumber);
@@ -5476,7 +5048,7 @@ void doAction(String phoneNumber)
     String text = "تماس تلفنی فعال شد";
     ReplyHex(text, phoneNumber);
   }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+
   clearSmsVariables();
 }
 
@@ -5515,62 +5087,62 @@ String outputIsBusy(uint8_t index)
   return "";
 }
 
-/*******************************************************************************
- * Reply function
- * Send an sms
- ******************************************************************************/
+
+
+
+
 void Reply(String text, String Phone)
 {
   SendShortCommand("AT+CMGF=1", "");
-  // Serial2.print("AT+CMGF=1\r");
-  // delay(1000);
+
+
   if (op == "irancell")
   {
     SendShortCommand("AT+CSMP=17,167,0,0", "");
-    // Serial2.println("AT+CSMP=17,167,0,0");
-    // delay(1000);
+
+
   }
   SendShortCommand("AT+CMGS=\"" + Phone + "\"", "");
-  // Serial2.print("AT+CMGS=\"" + Phone + "\"\r");
-  // delay(1000);
+
+
   SendShortCommand(text, "");
-  // Serial2.print(text);
+
   delay(100);
   Serial2.write(0x1A);
-  // ascii code for ctrl-26 //sim800.println((char)26); //ascii code for ctrl-26
-  // delay(2000);
+
+
   Serial.println("SMS Sent Successfully.");
   receiveSms();
 }
 
 void ReplyHex(String text, String Phone)
 {
-  char charArray[160]; // Adjust size as needed
+  char charArray[160];
   text.toCharArray(charArray, 160);
   String hexString = printCodePoints((uint8_t *)charArray);
 
-  // modem.sendSMS_UTF16(Phone.c_str(), hexString.c_str(), hexString.length());
+
   SendShortCommand("AT+CMGF=1", "");
-  // Serial2.print("AT+CMGF=1\r");
-  // delay(1000);
-  // Serial2.print("AT+CSCS=\"HEX\"\r");
+
+
+
   SendShortCommand("AT+CSCS=\"HEX\"", "");
-  // delay(1000);
-  // if (op == "irancell") {
+
+
   SendShortCommand("AT+CSMP=17,167,0,8", "");
-  // Serial2.println("AT+CSMP=17,167,0,8");
-  // delay(1000);
-  // }
-  // Serial2.print("AT+CMGS=\"" + Phone + "\"\r");
+
+
+
+
   SendShortCommand("AT+CMGS=\"" + Phone + "\"", "");
 
-  // delay(1000);
+
   SendShortCommand(hexString, "");
-  // Serial2.print(hexString);
+
   delay(100);
   Serial2.write(0x1A);
-  // ascii code for ctrl-26 //sim800.println((char)26); //ascii code for ctrl-26
-  // delay(1000);
+
+
   Serial.println("SMS Sent Successfully.");
   receiveSms();
 }
@@ -5584,16 +5156,16 @@ void ForwardHex(String text, String Phone)
   Serial2.print("AT+CSCS=\"HEX\"\r");
   delay(1000);
 
-  // if (op == "irancell") {
+
   Serial2.println("AT+CSMP=17,167,0,8");
   delay(1000);
-  // }
+
   Serial2.print("AT+CMGS=\"" + Phone + "\"\r");
   delay(1000);
   Serial2.print(text);
   delay(100);
   Serial2.write(0x1A);
-  // ascii code for ctrl-26 //sim800.println((char)26); //ascii code for ctrl-26
+
   delay(3000);
 
   Serial.println("SMS Sent Successfully.");
@@ -5607,7 +5179,7 @@ void callAdmin(int index)
   {
     scenarios[index].lastNotif = millis();
     Serial2.println("ATD+ " + phoneNo[0] + ";");
-    addTask(hangUp, 20000); // اجرا پس از 20 ثانیه
+    addTask(hangUp, 20000);
   }
 }
 
@@ -5621,19 +5193,19 @@ void answerCall()
   Serial2.println("ATA");
 }
 
-/*******************************************************************************
- * writeToEEPROM function:
- * Store registered phone numbers in EEPROM
- ******************************************************************************/
+
+
+
+
 void writeToEEPROM(const char *addrOffset, const String &strToWrite)
 {
 
-  // byte len = 13;  //strToWrite.length();
-  // EEPROM.write(addrOffset, len);
+
+
   EEPROM.putString(addrOffset, strToWrite);
 
-  // for (int i = 0; i < len; i++) {
-  // }
+
+
 }
 void writeIntToEEPROM(const char *addrOffset, unsigned int value)
 {
@@ -5646,10 +5218,10 @@ void writeDateTimeEEPROM(const char *addrOffset, const String &strToWrite)
   EEPROM.putString(addrOffset, strToWrite);
 }
 
-/*******************************************************************************
- * readFromEEPROM function:
- * Store phone numbers in EEPROM
- ******************************************************************************/
+
+
+
+
 String readFromEEPROM(const char *addrOffset)
 {
   String value = EEPROM.getString(addrOffset);
@@ -5660,14 +5232,14 @@ int readIntFromEEPROM(const char *addrOffset)
   return EEPROM.getUInt(addrOffset, 0);
 }
 
-/*******************************************************************************
- * comparePhone function:
- * compare phone numbers stored in EEPROM
- ******************************************************************************/
+
+
+
+
 boolean comparePhone(String number)
 {
   boolean flag = 0;
-  //--------------------------------------------------
+
   for (uint8_t i = 0; i < totalPhoneNo; i++)
   {
     phoneNo[i] = readFromEEPROM(offsetPhone[i]);
@@ -5678,32 +5250,32 @@ boolean comparePhone(String number)
     }
   }
 
-  //--------------------------------------------------
+
   return flag;
 }
 
 void flip()
 {
-  // uint8_t state = digitalRead(BUILTIN_LED);  // get the current state of GPIO1 pin
-  // digitalWrite(BUILTIN_LED, !state);         // set pin to the opposite state
+
+
 
   ++count;
-  // when the counter reaches a certain value, start blinking like crazy
+
   if (count == 10)
   {
     flipper.attach(0.1, flip);
   }
-  // when the counter reaches yet another value, stop blinking
+
   else if (count == 60)
   {
     flipper.detach();
   }
 }
 
-/*******************************************************************************
- * debugPrint function:
- * compare phone numbers stored in EEPROM
- ******************************************************************************/
+
+
+
+
 void debugPrint(String text)
 {
   if (DEBUG_MODE == 1)
@@ -5719,9 +5291,9 @@ String createOutArray()
   {
     result += String(outputs[i].type);
     result += (mcp.digitalRead(outputs[i].gpio)) ? '1' : '0';
-    // if (i < (totalOutputs - 1)) {
-    //   result += ",";
-    // }
+
+
+
   };
   outStates = result;
   return result;
@@ -5748,9 +5320,9 @@ String createInArray()
   for (uint8_t i = 0; i < totalInputs; i++)
   {
     result += (inputs[i].state) ? '1' : '0';
-    // if (i < (totalOutputs - 1)) {
-    // result += ",";
-    // }
+
+
+
   };
   inStates = result;
 
@@ -5785,13 +5357,13 @@ String prepareData()
     temp["timer"] = (outputs[i].timer.isEmpty()) ? "" : outputs[i].timer;
     temp["state"] = (mcp.digitalRead(outputs[i].gpio)) ? 1 : 0;
   };
-  // for (uint8_t i = 0; i < totalInputs; i++) {
-  //   JsonObject tmp = doc.createNestedObject("input" + String(i));
-  //   tmp["value"] = (inputs[i].value.isEmpty()) ? "" : String(inputs[i].state);
-  // };
-  // doc["status"] = mqtt_connected ? "ONLINE" : "OFFLINE";
+
+
+
+
+
   doc["net"] = mqttNet;
-  // doc["conn"] = rtc.getEpoch();
+
   doc["sets"] = createSettingArray();
   doc["progs"] = createScenariosArray();
 
@@ -5822,22 +5394,22 @@ String mqttPeresence()
 {
   StaticJsonDocument<64> doc;
   doc["mac"] = mac;
-  // doc["connected"] = rtc.getEpoch();
+
   doc["event"] = "report";
   doc["oSt"] = outStates;
   doc["iSt"] = inStates;
   doc["pwm"] = pwmStates;
 
-  unsigned char unsignedCharArray[164]; // +1 for the null terminator
+  unsigned char unsignedCharArray[164];
 
-  // String result;
+
   serializeJson(doc, unsignedCharArray, 164);
-  // Serial.println("ciphered:" + vigenereCipher(result, cipher_key, true));  //true to encode
-  // Serial.println(result);
 
-  // Encode base64 data
+
+
+
   unsigned char base64[164];
-  // encode_base64() places a null terminator automatically, because the output is a string
+
   unsigned int base64_length = encode_base64(unsignedCharArray, strlen((char *)unsignedCharArray), base64);
   Serial.println(String((const char *)base64));
   return String((const char *)base64);
@@ -5892,7 +5464,7 @@ String prepareDbData(String event)
   doc["sig"] = String(signalQuality);
   doc["mac"] = mac;
   doc["event"] = event;
-  // doc["status"] = "ONLINE";
+
   doc["net"] = mqttNet;
   doc["sets"] = createSettingArray();
   doc["tims"] = createTimersArray();
@@ -6035,7 +5607,7 @@ String prepareSMSStats()
   };
   sensors.requestTemperatures();
 
-  // temp0 = sensors.getTempCByIndex(0);
+
   for (uint8_t i = 0; i < totalTemps; i++)
   {
     temps[i].temp = sensors.getTempCByIndex(i);
@@ -6053,27 +5625,20 @@ String prepareSMSStats()
 void checkUpdate(String firmwareUrl)
 {
   WiFiClient client;
-  // client.setCACert(rootCACertificate);
-  // client.setReuse(false);  // add this
 
-  // Reading data over SSL may be slow, use an adequate timeout
-  client.setTimeout(12000); // timeout argument is defined in milliseconds for setTimeout
 
-  // The line below is optional. It can be used to blink the LED on the board during flashing
-  // The LED will be on during download of one buffer of data from the network. The LED will
-  // be off during writing that buffer to flash
-  // On a good connection the LED should flash regularly. On a bad connection the LED will be
-  // on much longer than it will be off. Other pins than LED_BUILTIN may be used. The second
-  // value is used to put the LED on. If the LED is on with HIGH, that value should be passed
-  // httpUpdate.setLedPin(LED_BUILTIN, HIGH);
+
+
+  client.setTimeout(12000);
+# 6069 "C:/Users/Amin/Documents/PlatformIO/Projects/250408-163529-esp32doit-devkit-v1 - Copy/src/esp32_wifi_gsm_littlefs_node_red_scenario_last.ino"
   httpUpdate.onProgress(update_progress);
 
   t_httpUpdate_return ret = httpUpdate.update(client, firmwareUrl, "", [](HTTPClient *client)
                                               {
-                                                // client->setAuthorization("test", "password");
+
                                               });
-  // Or:
-  // t_httpUpdate_return ret = httpUpdate.update(client, "server", 443, "/file.bin");
+
+
   StaticJsonDocument<256> doc;
   doc["event"] = "feedback";
   doc["mac"] = mac;
