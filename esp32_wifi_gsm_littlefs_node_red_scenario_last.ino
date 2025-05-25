@@ -1,5 +1,6 @@
 #include <LittleFS.h>
 #include "base64.hpp"
+#include "logo.h"
 // #include <stdint.h>
 // #include <iostream>
 #define TINY_GSM_MODEM_SIM800 // Define the modem type
@@ -31,6 +32,7 @@ TinyGsm modem(SerialAT);
 // #include <AsyncEventSource.h>
 #include <HTTPUpdate.h>
 #include "index.h"
+#include "ca.h"
 
 // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 #include <ArduinoJson.h>
@@ -127,6 +129,7 @@ const uint8_t totalInputs = 8;
 const uint8_t totalRemotes = 48;
 const uint8_t totalTemps = 3;
 const uint8_t totalAnalogs = 2;
+const uint8_t totalRFSensors = 20;
 const uint8_t totalScenarios = 16; // حداکثر تعداد سناریوها
 
 enum MQTT_NET
@@ -272,7 +275,7 @@ String buffer;
 unsigned int aResolution = 4095;
 const int freq = 3000; // 3610
 
-unsigned int analog_read_threshold = 1500; // from 4096
+unsigned int analog_read_threshold = 2000; // from 4096
 float temp_threshold = 1.0;
 uint8_t signal_threshold = 2;
 uint8_t TEMP_THRESHOLD_BIAS = 3.0;
@@ -291,7 +294,13 @@ AsyncEventSource events("/events");
 
 // a string to hold NTP server to request epoch time
 // const char *ntpServer = "europe.pool.ntp.org";
-const char *ntpServer = "pool.ntp.org";
+const char *ntpServer[3] = {
+    "pool.ntp.org",
+    "time.nist.gov",
+    "europe.pool.ntp.org"};
+// const char *ntpServer1 =  "europe.pool.ntp.org";
+// const char *ntpServer2 = "pool.ntp.org";
+// const char *ntpServer3 = "time.google.com";
 const long gmtOffset_sec = 12600;
 const int daylightOffset_sec = 0;
 // Variable to hold current epoch timestamp
@@ -352,6 +361,7 @@ boolean DEBUG_MODE = 1;
 /// setting variables
 bool simInserted = false;
 bool gsmNetwork = false;
+bool saveLastStates = false;
 bool hasWifi = false;
 bool forceUseGprs = false;
 bool gprsConnected = false;
@@ -360,7 +370,9 @@ bool callOnAlert = true;
 bool securityMode = false;
 bool notifyScenarios = true;
 bool alerting = false;
-unsigned int remoteCount = 0;
+uint8_t remoteGroupCount = 0;
+uint8_t remoteCount = 0;
+uint8_t rfSensorCount = 0;
 
 unsigned long now = millis();
 unsigned long lastTrigger = 0;
@@ -525,6 +537,33 @@ void callback(char *topic, byte *payload, unsigned int length)
     // }
     ///////////////////////////////////////////////////////////////////////////
   }
+  else if (event == "setting")
+  {
+    String value = doc["setting"].as<String>(); // Use as<const char*> for conversion;
+    Serial.print("event setting : ");
+    Serial.println(value);
+    if (value.length() == 7)
+    {
+      securityMode = value[0] == '1';
+      callOnAlert = value[1] == '1';
+      notifyScenarios = value[2] == '1';
+      hasWifi = value[3] == '1';
+      gsmNetwork = value[4] == '1';
+      forceUseGprs = value[5] == '1';
+      saveLastStates = value[6] == '1';
+
+      Serial.println("change setting");
+      doc["mac"] = mac;
+      doc["event"] = "feedback";
+      doc["sets"] = value;
+
+      String result;
+      serializeJson(doc, result);
+      Serial.println(result);
+
+      publishReport(result.c_str());
+    }
+  }
   else if (event == "ain")
   {
     Serial.print("event adc : ");
@@ -680,15 +719,74 @@ void callback(char *topic, byte *payload, unsigned int length)
     }
     ///////////////////////////////////////////////////
   }
+  else if (event == "rfList")
+  {
+    String list = "";
+    if (remoteCount > 0)
+    {
+      list = RfListRemoteFile(remoteGroupCount);
+    }
+    Serial.println("rfList");
+    Serial.println(list);
+
+    doc["mac"] = mac;
+    doc["event"] = "feedback";
+    doc["rfList"] = list;
+
+    String result;
+    serializeJson(doc, result);
+    Serial.println(result);
+    publishReport(result.c_str());
+  }
   else if (event == "rfReg")
   {
-
-    handleRemoteRegister();
+    String label = doc["label"].as<String>();
+    if (label == nullptr)
+    {
+      label = "";
+    }
+    handleRemoteRegister(label);
   }
   else if (event == "rfDel")
   {
-    handleRemoveRemote();
+    String label = doc["label"].as<String>();
+    if (label == nullptr || label == "")
+    {
+      return;
+    }
+    if (handleRemoveRfGroup(label))
+    {
+      String list = "";
+      if (remoteCount > 0)
+      {
+        list = RfListRemoteFile(remoteGroupCount);
+      }
+      Serial.println("rfList");
+      Serial.println(list);
+
+      doc["mac"] = mac;
+      doc["event"] = "feedback";
+      doc["rfList"] = list;
+
+      String result;
+      serializeJson(doc, result);
+      Serial.println(result);
+      publishReport(result.c_str());
+    }
     ///////////////////////////////////////////////////
+  }
+  else if (event == "regSensor")
+  {
+    String label = doc["label"].as<String>();
+    if (label == nullptr)
+    {
+      label = "";
+    }
+    handleSensorRegister(label);
+  }
+  else if (event == "remSensor")
+  {
+    handleRemoveRemote();
   }
   else if (event == "admins")
   {
@@ -757,7 +855,10 @@ void reconnect()
   const char *broker = m_server.c_str();
   if (hasWifi && !gprsConnected && !forceUseGprs)
   {
+    // Serial.println(ca_cert);
+    // wifiClient.setCACert(ca_cert);
     activeClient = &wifiClient; // Use WiFiClient
+
     mqtt.setClient(*activeClient);
     mqtt.setServer(broker, port);
     mqtt.setCallback(callback);
@@ -769,11 +870,9 @@ void reconnect()
   else if (gprsConnected)
   {
     activeClient = &gsmClient; // Use TinyGsmClient
-
     mqtt.setClient(*activeClient);
     mqtt.setServer(broker, port);
     mqtt.setCallback(callback);
-
     mqttNet = GPRS;
     Serial.println("mqttNet");
     Serial.println(mqttNet);
@@ -781,7 +880,7 @@ void reconnect()
   mqtt.setBufferSize(1024);
 
   // Loop until we're reconnected
-  while (!mqtt.connected() && mqtt_count<3)
+  while (!mqtt.connected() && mqtt_count < 3)
   {
     mqtt_connected = false;
     Serial.print("Attempting MQTT connection...");
@@ -789,7 +888,7 @@ void reconnect()
     char clientId[24];
     snprintf(clientId, sizeof(clientId), "ESP32Client-%04X", random(0xffff));
 
-    String myTopic = sub_topic + ">" + mac;
+    String myTopic = sub_topic + "/" + mac;
 
     // String m_password = "123456";
     StaticJsonDocument<64> payload;
@@ -802,26 +901,30 @@ void reconnect()
     serializeJson(payload, jsonBuffer, sizeof(jsonBuffer));
 
     // Attempt to connect with last Will Message
-    if (mqtt.connect(clientId, "hosein282", "At9127995883", "action_server", 0, false, jsonBuffer))
-    {
+    if (mqtt.connect(clientId, "node", "zR~{$y2`3S08", "action_server", 0, false, jsonBuffer))
+    { // node = zR~{$y2`3S08
       mqtt_count = 0;
       Serial.println("connected");
       Serial.println("Sub to");
       Serial.println(myTopic);
       // Once connected, publish an announcement...
       // String sts = prepareDbData("report");
-      StaticJsonDocument<64> payload;
-      payload["event"] = "state";
-      payload["mac"] = mac;
-      payload["status"] = "ONLINE";
-      payload["net"] = mqttNet;
+      String result = prepareDbData("feedback");
 
-      char jsonBuffer[128];
-      serializeJson(payload, jsonBuffer, sizeof(jsonBuffer));
+      publishReport(result.c_str());
 
-      // String peresence = mqttPeresence();
-      // mqtt.publish("action_server", JSON.c_str());
-      publishReport(jsonBuffer);
+      // StaticJsonDocument<64> payload;
+      // payload["event"] = "state";
+      // payload["mac"] = mac;
+      // payload["status"] = "ONLINE";
+      // payload["net"] = mqttNet;
+
+      // char jsonBuffer[128];
+      // serializeJson(payload, jsonBuffer, sizeof(jsonBuffer));
+
+      // // String peresence = mqttPeresence();
+      // // mqtt.publish("action_server", JSON.c_str());
+      // publishReport(jsonBuffer);
 
       // ... and resubscribe
       mqtt.subscribe(myTopic.c_str());
@@ -868,7 +971,7 @@ void initLittleFS()
 // Read File from LittleFS
 String readFile(fs::FS &fs, const char *path)
 {
-  Serial.printf("Reading file: %s\r\n", path);
+  // Serial.printf("Reading file: %s\r\n", path);
 
   File file = fs.open(path);
   if (!file || file.isDirectory())
@@ -957,11 +1060,14 @@ bool initWiFi()
     currentMillis = millis();
     if (currentMillis - previousMillis >= 10000)
     {
+      digitalWrite(STATUS_LED, LOW);
+
       Serial.println("Failed to connect.");
       // resetWifi();
       return false;
     }
   }
+  digitalWrite(STATUS_LED, HIGH);
 
   if (!MDNS.begin("hubway"))
   { // Set the hostname to "esp32.local"
@@ -1235,23 +1341,18 @@ void updateDisplay()
     display.fillRect(108, 14, 3, 6, 1);
     display.fillRect(112, 12, 3, 8, 1);
   }
-  display.fillRect(74, 12, 10, 7, 0);
+  display.fillRect(118, 12, 10, 8, 0);
 
   if (WiFi.status() == WL_CONNECTED)
   {
-    // display.setCursor(74, 34);
     display.drawBitmap(118, 12, image_Icon_Wifi_bits, 10, 8, 1);
-    // display.println("CONNECTED");
   }
   else
   {
-    // display.drawBitmap(118, 12, image_Icon_Wifi_bits, 10, 8, 1);
     display.setCursor(118, 14);
-
     display.println("x");
     display.setTextSize(1);
     // display.setTextColor(WHITE);
-
     // display.setCursor(120, 10);
     // display.println("/");
   }
@@ -1432,15 +1533,17 @@ void loadingDisplay(int progress, String title)
   display.setTextColor(WHITE);
   display.setFont(NULL);
 
-  display.setTextSize(2);
-  display.setCursor(38, 4);
-  display.println("VIIO");
+  // display.setTextSize(2);
+  // display.setCursor(38, 4);
+  // display.println("VIIO");
+  display.drawBitmap(20, 4, logo, 90, 24, 1);
+
   display.setTextSize(1);
   display.setTextWrap(0);
-  display.setCursor(34, 24);
+  display.setCursor(34, 31);
   display.println(title + "..");
-  display.drawRect(20, 40, 90, 16, 1);
-  display.fillRect(22, 42, p, 12, 1);
+  display.drawRect(20, 42, 90, 16, 1);
+  display.fillRect(22, 44, p, 12, 1);
   display.display();
 }
 
@@ -1514,10 +1617,24 @@ void reloadDisplay()
   updateDisplay();
 }
 
+void displayRfSensorRg(String remote, unsigned long time)
+{
+
+  unsigned long t = (int)(time * 92) / 10000;
+  display.clearDisplay();
+  display.setCursor(28, 10);
+  display.println("ADD SENSOR..");
+  display.setCursor(31, 28);
+  display.println("set " + remote);
+  display.print(" / " + totalRFSensors);
+  display.drawRoundRect(20, 44, 92, 16, 3, 1);
+  display.fillRoundRect(20, 44, t, 16, 3, 1);
+  display.display();
+}
 void displayRemoteRg(String remote, unsigned long time)
 {
 
-  unsigned long t = (int)(time * 92) / 24000;
+  unsigned long t = (int)(time * 92) / (totalOutputs * 4000);
   display.clearDisplay();
   display.setCursor(28, 10);
   display.println("ADD REMOTE..");
@@ -1530,7 +1647,7 @@ void displayRemoteRg(String remote, unsigned long time)
 void displayRemoteDel(String remote, unsigned long time)
 {
 
-  unsigned long t = (int)(time * 92) / 24000;
+  unsigned long t = (int)(time * 92) / (totalOutputs * 4000);
   display.clearDisplay();
   display.setCursor(28, 10);
   display.println("Remove REMOTE..");
@@ -1639,7 +1756,7 @@ void setup()
     temps[i].temp = sensors.getTempCByIndex(i);
     Serial.println(temps[i].temp);
   }
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer[0], ntpServer[1], ntpServer[2]);
 
   // Receiver on interrupt 0 => that is pin #2
   mySwitch.enableReceive(13);
@@ -1656,7 +1773,8 @@ void setup()
 
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 
-  Serial.println("MCP23xxx Combo Test!");
+  Serial.println("MCP23xxx!");
+
   // uncomment appropriate mcp.begin
   if (!mcp.begin_I2C(0x20))
   {
@@ -1664,6 +1782,15 @@ void setup()
   }
   else
   {
+    if (saveLastStates)
+    {
+      outStates = readFromEEPROM("state");
+    }
+    else
+    {
+      createOutArray();
+    }
+
     delay(1000);
     for (uint8_t i = 0; i < totalOutputs; i++)
     {
@@ -1672,13 +1799,14 @@ void setup()
       mcp.pinMode(outputs[i].gpio, OUTPUT);
       delay(100);
 
-      mcp.digitalWrite(outputs[i].gpio, LOW);
+      mcp.digitalWrite(outputs[i].gpio, outStates[(i * 2) + 1] == 1 ? HIGH : LOW);
       // pinMode(outputs[i].gpio, OUTPUT); // Relay 1
     }
     for (uint8_t i = 0; i < totalInputs; i++)
     {
       mcp.pinMode(inputs[i].gpio, INPUT_PULLUP); // Relay 1
       delay(100);
+
       mcp.disableInterruptPin(inputs[i].gpio);
 
       // Serial.println("i :");
@@ -1764,7 +1892,7 @@ void setup()
     //   // ReplyHex(txt, phoneNo[0]);
     // }
     debugPrint("Admin Phone Is Registered");
-    flipper.detach();
+    // flipper.detach();
 
     delay(100);
   }
@@ -1953,13 +2081,13 @@ void checkRelayTimes()
 void switchRelay(uint8_t index, bool state, uint16_t time, bool isLocked)
 {
 
-  Serial.println("state");
-  Serial.println(state);
-  Serial.println(mcp.digitalRead(outputs[index].gpio));
+  // Serial.println("state");
+  // Serial.println(state);
+  // Serial.println(mcp.digitalRead(outputs[index].gpio));
 
   if (state == mcp.digitalRead(outputs[index].gpio))
   {
-    Serial.println("switch return");
+    // Serial.println("switch return");
     return;
   }
 
@@ -2050,6 +2178,7 @@ void switchRelay(uint8_t index, bool state, uint16_t time, bool isLocked)
     outputs[index].now = millis(); // زمان فعلی را ذخیره کن
     outputs[index].time = time;    // زمان فعلی را ذخیره کن
   }
+  saveLastRelayStates();
 }
 
 void runScenarios()
@@ -2062,11 +2191,11 @@ void runScenarios()
     char it = scenario.value.charAt(0); // in type
     char ot = scenario.value.charAt(1); // out type
 
-    bool oCondition = false; // شرط اجرا شده آیا؟
+    bool oCondition = false; // آیا خروجی در وضعیت هدف است؟
 
-    bool conditionMet = false; // شرط لازم الاجرا
-    float ifStatement;         // مقدار فعلی آستانه بر اساس نوع شرط
-    float bias;                // مقدار استانه توقف
+    bool conditionMet = false; // آیا شرط اجرا برقرار است؟
+    float ifStatement = 0;     // مقدار فعلی سنسور/ورودی
+    float bias = 0;            // مقدار آستانه توقف
     int time = 0;
     if (scenario.swType == 1)
     { // 3 ثانیه
@@ -2084,9 +2213,7 @@ void runScenarios()
     }
     else if (it == 'd')
     {
-      ifStatement = !mcp.digitalRead(inputs[scenario.input].gpio);
-      // Serial.println("ifStatement");
-      // Serial.println(ifStatement);
+      ifStatement = mcp.digitalRead(inputs[scenario.input].gpio);
     }
     else if (it == 'a')
     {
@@ -2101,97 +2228,65 @@ void runScenarios()
     }
     else
     {
-      // اگر نوع خروجی رله باشد
       oCondition = outputs[scenario.outPin].state == scenario.outState;
-      // Serial.println("oCondition");
-      // Serial.println(outputs[scenario.outPin].state);
-      // Serial.println(scenario.outState);
-      // Serial.println(oCondition);
     }
 
-    ////////////////////////////////// input type is digital
-
+    // شرط اجرا برای ورودی دیجیتال
     if (it == 'd' && ot == 'r')
     {
-
       if (scenario.condition == "==")
       {
         if ((int)ifStatement == scenario.outState)
         {
           conditionMet = true;
         }
-        else
-        {
-          conditionMet = false;
-        }
-        // Serial.println("oCondition =>it == d");
       }
       else if (scenario.condition == "!=" && (int)ifStatement != scenario.outState)
       {
         conditionMet = true;
       }
-      ////////////////////////////////// input type is temperature
     }
+    // شرط اجرا برای دما
     else if (it == 't')
     {
-
       if (oCondition)
       {
-        /// already trigged
-        // Serial.println("relay is ON");
-
-        // ifStatement -= TEMP_THRESHOLD_BIAS;
         if (scenario.condition == ">" && ifStatement < scenario.threshold - bias)
         {
-
           conditionMet = true;
         }
         else if (scenario.condition == "<" && ifStatement > scenario.threshold + bias)
         {
-
           conditionMet = true;
         }
         else if (scenario.condition == "==" && (int)ifStatement == (int)scenario.threshold)
         {
-
           conditionMet = true;
         }
-        /// not trigged
       }
       else
       {
         if (scenario.condition == ">" && ifStatement > scenario.threshold)
         {
-          // Serial.println("> is OFF");
-
           conditionMet = true;
         }
         else if (scenario.condition == "<" && ifStatement < scenario.threshold)
         {
-          // Serial.println("< is OFF");
-
           conditionMet = true;
         }
         else if (scenario.condition == "==" && ifStatement == scenario.threshold)
         {
-          // Serial.println("= is OFF");
-
           conditionMet = true;
         }
       }
-      ////////////////////////////////// input type is analog
     }
+    // شرط اجرا برای آنالوگ
     else if (it == 'a')
     {
-      /// already trigged
-
       if (oCondition)
       {
-        // Serial.println("relay is ON");
-        // ifStatement -= TEMP_THRESHOLD_BIAS;
         if (scenario.condition == ">" && ifStatement < scenario.threshold - bias)
         {
-          // Serial.println("> is ON");
           conditionMet = true;
         }
         else if (scenario.condition == "<" && ifStatement > scenario.threshold + bias)
@@ -2202,26 +2297,19 @@ void runScenarios()
         {
           conditionMet = true;
         }
-        /// not trigged
       }
       else
       {
         if (scenario.condition == ">" && ifStatement > scenario.threshold)
         {
-          // Serial.println("> is OFF");
-
           conditionMet = true;
         }
         else if (scenario.condition == "<" && ifStatement < scenario.threshold)
         {
-          // Serial.println("< is OFF");
-
           conditionMet = true;
         }
         else if (scenario.condition == "==" && ifStatement == scenario.threshold)
         {
-          // Serial.println("= is OFF");
-
           conditionMet = true;
         }
       }
@@ -2233,55 +2321,51 @@ void runScenarios()
       if (ot == 'p')
       {
         setPwm(scenario.outPin, scenario.outState);
-        // Serial.println("setPwm(scenario.outPin");
       }
       else
       {
-        if (oCondition)
+        // اینجا مشکل اصلی: اگر خروجی همین الان در وضعیت هدف باشد (oCondition==true)،
+        // دوباره switchRelay اجرا نمی‌شود مگر اینکه swType!=0 باشد.
+        // پس اگر خروجی قبلاً در وضعیت هدف است و swType==0، هیچ عملی انجام نمی‌شود.
+        // این باعث می‌شود بار اول که سناریو فعال می‌شود، اگر خروجی قبلاً در وضعیت هدف باشد، هیچ تغییری رخ ندهد.
+        if (!oCondition || scenario.swType != 0)
         {
-          if (scenario.swType != 0)
+          switchRelay(scenario.outPin, scenario.outState, time, true);
+          if (!oCondition)
           {
-            switchRelay(scenario.outPin, !scenario.outState, time, false);
-            // Serial.println("conditionMet unlocked");
-            continue;
-          } // lock type
-          else
-          {
-            // Serial.println("conditionMet lock type");
-            continue;
+            // فقط اگر خروجی تغییر کرد، نوتیفیکیشن ارسال شود
+            if (scenario.notif == 1 && notifyScenarios)
+              notifHexSms(i, phoneNo[0]);
+            else if (scenario.notif == 2 && notifyScenarios)
+              callAdmin(i);
           }
+          continue;
         }
         else
         {
-          // if (!outputs[scenario.outPin].locked) {
           switchRelay(scenario.outPin, scenario.outState, time, true);
-          Serial.println("conditionMet locked");
           if (scenario.notif == 1 && notifyScenarios)
           {
             notifHexSms(i, phoneNo[0]);
           }
           else if (scenario.notif == 2 && notifyScenarios)
           {
-
             callAdmin(i);
           }
           continue;
-          // }
         }
       }
     }
     else
     {
-      // for digital input
+      // برای ورودی دیجیتال
       if (scenario.condition == "==")
       {
         switchRelay(scenario.outPin, !scenario.outState, time, true);
-        // Serial.println("conditionMet ==");
       }
       else
       {
         switchRelay(scenario.outPin, scenario.outState, time, true);
-        // Serial.println("conditionMet !=");
       }
     }
   }
@@ -2412,61 +2496,6 @@ void setupVariables()
     }
   }
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-  //  Serial.println("List of inputs");
-  //  for (uint8_t i = 0; i < totalInputs; i++) {
-  //    inputs[i].value = readFromEEPROM(inputs[i].key);
-  //    if (inputs[i].value.length() < 1) {
-  //      inputs[i].value = "";
-  //      Serial.println(String(i + 1) + ": empty");
-  //    } else {
-  //      inputs[i].out = (inputs[i].value.substring(1).toInt()) - 1;
-
-  //     Serial.println(String(i + 1) + ": " + inputs[i].value);
-  //   }
-  // }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
-  // Serial.println("List of chains");
-  // for (uint8_t index = 0; index < totalOutputs; index++) {
-  //   String key = "c" + String(index + 1);
-
-  //   String value = readFromEEPROM(key.c_str());
-  //   if (value.length() < 1) {
-  //     Serial.println(String(index + 1) + ": empty");
-  //   } else {
-  //     // Create a JSON document
-  //     StaticJsonDocument<200> doc;  // Adjust size as needed
-
-  //     // Deserialize the JSON string
-  //     DeserializationError error = deserializeJson(doc, value);
-
-  //     // Check for errors
-  //     if (error) {
-  //       Serial.print("Deserialization failed: ");
-  //       Serial.println(error.c_str());
-  //       return;
-  //     }
-
-  //     // Extract the JSON array
-  //     JsonArray jsonArray = doc.as<JsonArray>();
-
-  //     // Convert the JSON array back to an integer array
-  //     int arraySize = jsonArray.size();
-
-  //     for (int i = 0; i < arraySize; i++) {
-  //       outputs[index].chain[i] = jsonArray[i];  // Copy values from JSON array to integer array
-  //     }
-
-  //     // Print the integer array
-  //     // Serial.println("Integer array:");
-  //     // for (int i = 0; i < arraySize; i++) {
-  //     //   Serial.println(jsonArray[i]);
-  //     // }
-  //     // stringToArray(value, outputs[i].chain);
-
-  //     // Serial.println(String(index + 1) + ": " + outputs[index].chain[0]);
-  //   }
-  // }
-  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
   Serial.println("List of Scenarios");
   for (uint8_t i = 0; i < totalScenarios; i++)
   {
@@ -2515,38 +2544,115 @@ void setupVariables()
   }
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
   Serial.println("List of Remotes");
-  const char *filePath = "/remotes.txt"; // File to store remote codes
+  countRfSensorsInRemoteFile();
+  // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 
-  // Read existing codes from the file
-  String fileContent = readFile(LittleFS, filePath);
-  if (fileContent.isEmpty())
-  {
-    Serial.println("No Remote Registered");
-  }
-  else
-  {
-    Serial.println("Remote Registered");
-    Serial.println(fileContent);
-  }
-  // Load and print stored remote codes
-  // for (int i = 0; i < totalRemotes; i++)
-  // { // Example: limit to 10 codes
-  //   String codeKey = "r" + String(i);
-  //   if (REMOTES.isKey(codeKey.c_str()))
-  //   {
-  //     remoteCount = remoteCount + 1;
-  //     Serial.print("Stored code: ");
-  //     Serial.println(REMOTES.getString(codeKey.c_str()));
-  //   }
-  // }
-  // if (remoteCount == 0)
+  //   Serial.println("List of RF Sensors");
+  // const char *filePath = "/sensors.txt"; // File to store remote codes
+
+  // // Read existing codes from the file
+  // String fileContent = readFile(LittleFS, filePath);
+  // if (fileContent.isEmpty())
   // {
-  //   Serial.println("empty");
+  //   Serial.println("No RF Sensors Registered");
   // }
   // else
   // {
-  //   Serial.println(remoteCount);
+  //   rfSensorCount =1;
+  //   Serial.println("Sensors Registered");
+  //   Serial.println(fileContent);
   // }
+}
+
+void countRfSensorsInRemoteFile()
+{
+  rfSensorCount = 0;
+  remoteCount = 0;
+  const char *filePath = "/remotes.txt";
+  String fileContent = readFile(LittleFS, filePath);
+  if (fileContent.isEmpty())
+  {
+    Serial.println("remotes is Empty");
+    return;
+  }
+  Serial.println(fileContent);
+
+  int lineStart = 0;
+  while (lineStart < fileContent.length())
+  {
+    int lineEnd = fileContent.indexOf('\n', lineStart);
+    if (lineEnd == -1)
+      lineEnd = fileContent.length();
+    String line = fileContent.substring(lineStart, lineEnd);
+    if (line.startsWith("4") || line.startsWith("5"))
+    {
+      rfSensorCount++;
+    }
+    else if (line.startsWith("1") || line.startsWith("2"))
+    {
+      remoteCount++;
+    }
+    lineStart = lineEnd + 1;
+  }
+  Serial.println("remotes Count");
+  Serial.println(remoteCount);
+  Serial.println("sensor Count");
+  Serial.println(rfSensorCount);
+}
+
+String RfListRemoteFile(uint8_t &count)
+{
+  const char *filePath = "/remotes.txt";
+  String fileContent = readFile(LittleFS, filePath);
+  if (fileContent.isEmpty())
+  {
+    Serial.println("remotes is Empty");
+    return "";
+  }
+  Serial.println(fileContent);
+
+  String list = "";
+  int lineStart = 0;
+  while (lineStart < fileContent.length())
+  {
+    int lineEnd = fileContent.indexOf('\n', lineStart);
+    if (lineEnd == -1)
+      lineEnd = fileContent.length();
+    String line = fileContent.substring(lineStart, lineEnd);
+    int comma = line.indexOf(",");
+    String title = line.substring(comma + 1);
+    Serial.printf("list : %s title: %s", list, title);
+
+    if (!listContains(list, title))
+    {
+      if (!list.isEmpty())
+      {
+        list += ",";
+      }
+      list += title;
+      count++;
+    }
+
+    lineStart = lineEnd + 1;
+  }
+  Serial.println("rfList Group Count:");
+  Serial.println(count);
+  return list;
+}
+bool listContains(const String &list, const String &item)
+{
+  int start = 0;
+  while (start < list.length())
+  {
+    int end = list.indexOf(',', start);
+    if (end == -1)
+      end = list.length();
+    String part = list.substring(start, end);
+    if (part == item)
+      return true;
+    start = end + 1;
+  }
+  return false;
 }
 
 bool processScenarios(String command, uint8_t index)
@@ -2662,6 +2768,7 @@ void initWifiAp()
   {
     mac = getMAC();
   }
+  flipper.attach(0.5, blink);
   // setupBLE();
   WiFi.setTxPower(WIFI_POWER_18_5dBm);
   WiFi.softAP(ssid_ap + mac.substring(0, 2) + mac.substring(9, 11) + mac.substring(15, 17), "2NyTf21=");
@@ -2860,8 +2967,7 @@ bool printLocalTime()
     Serial.print(F("."));
   }
   Serial.println(F(""));
-
-  if (timeinfo.tm_year < 2024 || timeinfo.tm_year > 2060)
+  if (timeinfo.tm_year < 124 || timeinfo.tm_year > 200)
   {
     Serial.println(F("Failed to obtain time"));
     return false;
@@ -2945,34 +3051,37 @@ void publishReport(const char *payload)
 }
 void checkSensors()
 {
-    unsigned long currentMillis = millis(); 
+  unsigned long currentMillis = millis();
 
   for (uint8_t i = 0; i < totalInputs; i++)
   {
     boolean newState = mcp.digitalRead(inputs[i].gpio);
- // اگر تغییری در وضعیت رخ داده باشد
-    if (newState != inputs[i].state) {
-      
+    // اگر تغییری در وضعیت رخ داده باشد
+    if (newState != inputs[i].state)
+    {
+
       // بررسی زمان debounce
-      if (currentMillis - inputs[i].lastTrigger >= SENSOR_DEBOUNCE_DELAY) {
-        
+      if (currentMillis - inputs[i].lastTrigger >= SENSOR_DEBOUNCE_DELAY)
+      {
+
         inputs[i].lastTrigger = currentMillis;
         inputs[i].state = newState;
-        
-        Serial.printf("Sensor%d changed - old state:%d new state:%d\n", 
-                      i+1, !newState, newState);
 
-        // ارسال گزارش در صورت اتصال MQTT 
-        if (mqtt_connected) {
+        Serial.printf("Sensor%d changed - old state:%d new state:%d\n",
+                      i + 1, newState, !newState);
+
+        // ارسال گزارش در صورت اتصال MQTT
+        if (mqtt_connected)
+        {
           DynamicJsonDocument doc(64);
           doc["mac"] = mac;
           doc["event"] = "report";
           doc["iSt"] = createInArray();
-          
+
           String result;
           serializeJson(doc, result);
           Serial.println(result);
-          
+
           publishReport(result.c_str());
         }
       }
@@ -3046,9 +3155,11 @@ void checkRfRemote()
       Serial.print("bit ");
       Serial.print("Protocol: ");
       Serial.println(mySwitch.getReceivedProtocol());
-
-      compareRemote(String(value));
-      delay(500);
+      if (remoteCount != 0)
+      {
+        compareRemote(String(value));
+        delay(500);
+      }
     }
     else
     {
@@ -3086,7 +3197,7 @@ void readButton()
     }
     else if (pressDuration > LONG_PRESS_TIME)
     {
-      handleRemoteRegister();
+      handleRemoteRegister("");
     }
     else if (pressDuration > SHORT_PRESS_TIME)
     {
@@ -3118,8 +3229,68 @@ void handleShortPress()
   //   ReplyHex(text, phoneNo[0]);
   // }
 }
-void handleRemoteRegister()
+
+void handleSensorRegister(String label)
 {
+  if (label == "")
+  {
+    label = "sensor";
+  }
+  unsigned long start = millis();
+  unsigned long lastKey = millis();
+
+  flipper.attach(0.2, flip);
+
+  while (millis() - start < 10000)
+  {
+    displayRfSensorRg(("Sensor " + String(rfSensorCount + 1)), (millis() - start));
+
+    if (rfSensorCount >= totalRFSensors)
+    {
+      break;
+    }
+
+    if (mySwitch.available())
+    {
+      String value = String(mySwitch.getReceivedValue());
+      if (value == 0)
+      {
+        Serial.print("Unknown encoding");
+      }
+      else
+      {
+        Serial.print("Sensor Received ");
+        Serial.print(value);
+        Serial.print(" / ");
+        Serial.print(mySwitch.getReceivedBitlength());
+        Serial.print("bit ");
+        Serial.print("Protocol: ");
+        Serial.println(mySwitch.getReceivedProtocol());
+        // save remote
+        // value = String(relaysCount) + value;
+        Serial.println(value);
+
+        saveRFSensorCode(value.c_str(), rfSensorCount, label + String(rfSensorCount + 1));
+        delay(500);
+
+        //
+      }
+
+      mySwitch.resetAvailable();
+    }
+    // relaysCount = relaysCount + 1;
+  }
+  Serial.print("Loop Break!");
+
+  initDisplay();
+  updateDisplay();
+}
+void handleRemoteRegister(String label)
+{
+  if (label == "")
+  {
+    label = "remote";
+  }
   Serial.println("long press");
   unsigned long start = millis();
   unsigned long lastKey = millis();
@@ -3127,7 +3298,7 @@ void handleRemoteRegister()
   uint8_t relaysCount = 0;
   flipper.attach(0.2, flip);
 
-  while (millis() - start < 24000)
+  while (millis() - start < (totalOutputs * 4000))
   {
     displayRemoteRg(("Relay " + String(relaysCount + 1)), (millis() - start));
 
@@ -3157,10 +3328,8 @@ void handleRemoteRegister()
           // value = String(relaysCount) + value;
           Serial.println(value);
 
-          saveRemoteCode(value.c_str(), relaysCount);
+          saveRemoteCode(value.c_str(), relaysCount, label + String(remoteGroupCount + 1));
           delay(500);
-
-          //
         }
 
         mySwitch.resetAvailable();
@@ -3171,11 +3340,32 @@ void handleRemoteRegister()
   }
   Serial.print("Loop Break!");
 
-  flipper.detach();
+  countRfSensorsInRemoteFile();
+
+  if (mqtt_connected)
+  {
+    String list = "";
+    if (remoteCount > 0)
+    {
+      list = RfListRemoteFile(remoteGroupCount);
+    }
+    Serial.println("rfList");
+    Serial.println(list);
+    DynamicJsonDocument doc(96);
+    doc["mac"] = mac;
+    doc["event"] = "feedback";
+    doc["rfList"] = list;
+    String result;
+    serializeJson(doc, result);
+    Serial.println(result);
+    publishReport(result.c_str());
+  }
+
   initDisplay();
   updateDisplay();
 }
-void saveRemoteCode(const char *code, uint16_t out)
+
+void saveRemoteCode(const char *code, uint16_t out, String label)
 {
   const char *filePath = "/remotes.txt"; // File to store remote codes
 
@@ -3190,11 +3380,34 @@ void saveRemoteCode(const char *code, uint16_t out)
 
   // Append the new code to the file
 
-  fileContent += String(out) + String(code) + "\n";
+  fileContent += String(10 + out) + String(code) + "," + label + "\n"; // 10 for index 0 , 11 for 1 ...
 
   writeFile(LittleFS, filePath, fileContent.c_str());
 
   Serial.print("Saved code: ");
+  Serial.println(code);
+}
+
+void saveRFSensorCode(const char *code, uint8_t input, String label)
+{
+  const char *filePath = "/remotes.txt"; // File to store remote codes
+
+  // Read existing codes from the file
+  String fileContent = readFile(LittleFS, filePath);
+  // Check if the code already exists
+  if (fileContent.indexOf(code) != -1)
+  {
+    Serial.println("Code already exists!");
+    return;
+  }
+
+  // Append the new code to the file
+
+  fileContent += String(40 + input) + String(code) + "," + label + "\n"; // 40 for index 0 sensor , 41 for 1 ...
+
+  writeFile(LittleFS, filePath, fileContent.c_str());
+
+  Serial.print("Saved sensor: ");
   Serial.println(code);
 }
 // void saveRemoteCode(const char *code, uint16_t out) {
@@ -3214,6 +3427,66 @@ void saveRemoteCode(const char *code, uint16_t out)
 //     }
 //   }
 // }
+
+bool handleRemoveRfGroup(String group)
+{
+  const char *filePath = "/remotes.txt"; // File where remote codes are stored
+
+  // Read the file content
+  String fileContent = readFile(LittleFS, filePath);
+
+  if (fileContent.isEmpty())
+  {
+    Serial.println("No remotes registered!");
+    return false;
+  }
+
+  // Split the file content into lines and rebuild it without the specified code
+  String newContent = "";
+  int lineStart = 0;
+  uint8_t codeFound = 0;
+
+  while (lineStart < fileContent.length())
+  {
+    int lineEnd = fileContent.indexOf('\n', lineStart);
+    if (lineEnd == -1)
+    {
+      lineEnd = fileContent.length();
+    }
+
+    String line = fileContent.substring(lineStart, lineEnd);
+
+    int comma = line.indexOf(',');
+    String storedCode = line.substring(comma + 1);
+    Serial.println(storedCode);
+    if (storedCode != group)
+    {
+      newContent += line + "\n";
+    }
+    else
+    {
+      codeFound++;
+      Serial.printf("Remote Group Found: %d", codeFound);
+    }
+
+    lineStart = lineEnd + 1;
+  }
+
+  if (codeFound > 0)
+  {
+    // Write the updated content back to the file
+
+    writeFile(LittleFS, filePath, newContent.c_str());
+    Serial.println("Remote group removed successfully!");
+    Serial.println(newContent);
+    return true;
+  }
+  else
+  {
+    Serial.println("Remote Group not found!");
+    return false;
+  }
+}
 
 void handleRemoveRemote()
 {
@@ -3382,7 +3655,7 @@ void compareRemote(String received)
 
   if (fileContent.isEmpty())
   {
-    Serial.println("No remotes registered!");
+    // Serial.println("No remotes registered!");
     return;
   }
 
@@ -3398,24 +3671,61 @@ void compareRemote(String received)
 
     String line = fileContent.substring(lineStart, lineEnd);
 
-    String out = line.substring(0, 1);
-    String code = line.substring(1);
+    String out = line.substring(0, 2);
+    int comma = line.indexOf(',');
+    String code = line.substring(2, comma);
 
-    Serial.println(out);
-    Serial.println(code);
-    Serial.println(received);
+    // Serial.println(out);
+    // Serial.println(code);
+    // Serial.println(received);
+    // Serial.println(line.substring(comma + 1));
     if (code == received)
     {
-      uint8_t index = out.toInt();
-      Serial.println("Remote matched!");
-      Serial.print("Relay index: ");
-      Serial.println(index);
+      if (out[0] == '4' || out[0] == '5')
+      { // if type code is registered sensor  "s123456,789index"
+        uint8_t index = out.toInt() - 40;
+        Serial.println("sensor index");
+        Serial.println(index);
+        if (mqtt_connected)
+        {
+          DynamicJsonDocument doc(64);
+          doc["mac"] = mac;
+          doc["event"] = "report";
+          doc["rfS"] = index;
+          String result;
+          serializeJson(doc, result);
+          Serial.println(result);
+          publishReport(result.c_str());
+        }
+        if (phoneNo[0].length() == 13)
+        {
+          String text = "سنسور بیسیم" + String(index + 1) + "تحریک شده است";
+          Serial.println(text);
+          ReplyHex(text, phoneNo[0]);
+        }
+        return;
+      }
+      else if (out[0] == '1' || out[0] == '2')
+      {
+        uint8_t index = out.toInt() - 10;
+        // Serial.println("Remote matched!");
+        // Serial.print("Relay index: ");
+        // Serial.println(index);
 
-      // Perform the desired action for the matched remote
-      boolean state = mcp.digitalRead(outputs[index].gpio);
-      switchRelay(index, !state, 0, false);
-
-      return;
+        String outPrg = outputIsBusy(index);
+        if (outPrg.isEmpty())
+        {
+          // Perform the desired action for the matched remote
+          boolean state = mcp.digitalRead(outputs[index].gpio);
+          switchRelay(index, !state, 0, false);
+          return;
+        }
+        else
+        {
+          Serial.println("registered but Output Locked!");
+          return;
+        }
+      }
     }
 
     lineStart = lineEnd + 1;
@@ -3574,10 +3884,14 @@ void checkMqttStatus()
   {
     mqtt.loop();
   }
-  else if (hasWifi || gprsConnected)
+  else
   {
-    reconnect();
+    mqtt_connected = false;
   }
+  // else if (hasWifi || gprsConnected)
+  // {
+  //   reconnect();
+  // }
 }
 
 String SendShortCommand(String command, String response)
@@ -3814,25 +4128,31 @@ void checkOutputSch(uint8_t input)
 
 String addScenario(String val)
 {
-   // پیدا کردن اولین جای خالی
+  // پیدا کردن اولین جای خالی
   int freeIndex = -1;
-  for (int i = 0; i < totalScenarios; i++) {
-    if (scenarios[i].value.isEmpty()) {
+  for (int i = 0; i < totalScenarios; i++)
+  {
+    if (scenarios[i].value.isEmpty())
+    {
       freeIndex = i;
       break;
     }
   }
-  if (freeIndex == -1) {
+  if (freeIndex == -1)
+  {
     Serial.println("max scenarios count reached");
     return "";
   }
-  if (processScenarios(val, freeIndex)) {
+  if (processScenarios(val, freeIndex))
+  {
     String key = "s" + String(freeIndex + 1);
     writeDateTimeEEPROM(key.c_str(), val);
     scenariosCount = 0;
     // شمارش مجدد سناریوهای فعال
-    for (int i = 0; i < totalScenarios; i++) {
-      if (!scenarios[i].value.isEmpty()) scenariosCount++;
+    for (int i = 0; i < totalScenarios; i++)
+    {
+      if (!scenarios[i].value.isEmpty())
+        scenariosCount++;
     }
     String text = scenarios[freeIndex].condition + "خروجی" + String(scenarios[freeIndex].outPin) + String(scenarios[freeIndex].outState);
     return text;
@@ -3842,7 +4162,7 @@ String addScenario(String val)
 
 void removeScenario(const char *key)
 {
-   Serial.println(key);
+  Serial.println(key);
   writeToEEPROM(key, "");
   Serial.println("after write");
 
@@ -3870,8 +4190,10 @@ void removeScenario(const char *key)
   }
   // شمارش مجدد سناریوهای فعال
   scenariosCount = 0;
-  for (int i = 0; i < totalScenarios; i++) {
-    if (!scenarios[i].value.isEmpty()) scenariosCount++;
+  for (int i = 0; i < totalScenarios; i++)
+  {
+    if (!scenarios[i].value.isEmpty())
+      scenariosCount++;
   }
 
   Serial.println("scenario deleted");
@@ -4526,6 +4848,10 @@ void checkTasks()
   }
   if (minCounter % 2 == 0)
   {
+    if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 2)
+    {
+      initWiFi();
+    }
     /// if has borker registered
 
     if (gsmNetwork)
@@ -4826,6 +5152,14 @@ void checkTasks()
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
   // getSignalQuality();
 }
+
+void saveLastRelayStates()
+{
+  if (saveLastStates)
+  {
+    writeToEEPROM("state", outStates);
+  }
+}
 int avgIndex = 0;
 
 void setAverageElement()
@@ -4898,17 +5232,6 @@ void createMovingAverage()
     String report = prepareDbLog("log");
     publishReport(report.c_str());
   }
-}
-
-void saveLastRelayStates()
-{
-  // String rStates = STATE_RELAY_1 ? "1" : "0";
-  // rStates += STATE_RELAY_2 ? "1" : "0";
-  // rStates += STATE_RELAY_3 ? "1" : "0";
-  // rStates += STATE_RELAY_4 ? "1" : "0";
-  // writeDateTimeEEPROM(offsetStates, rStates);
-  // Serial.println("rStates saved");
-  // Serial.println(rStates);
 }
 
 void sendMqttFeedback()
@@ -5495,7 +5818,7 @@ String outputIsBusy(uint8_t index)
   for (int i = 0; i < totalScenarios; i++)
   {
     Scenario scenario = scenarios[i];
-    if (scenario.value.isEmpty() || scenario.value.charAt(0) != 'o')
+    if (scenario.value.isEmpty() || scenario.value.charAt(0) == 'o')
       continue;
     uint8_t target = 100;
     if (index == scenario.input)
@@ -5682,10 +6005,14 @@ boolean comparePhone(String number)
   return flag;
 }
 
+void blink()
+{
+  digitalWrite(STATUS_LED, !digitalRead(STATUS_LED)); // set pin to the opposite state
+}
 void flip()
 {
-  // uint8_t state = digitalRead(BUILTIN_LED);  // get the current state of GPIO1 pin
-  // digitalWrite(BUILTIN_LED, !state);         // set pin to the opposite state
+  // get the current state of GPIO1 pin
+  digitalWrite(STATUS_LED, !digitalRead(STATUS_LED)); // set pin to the opposite state
 
   ++count;
   // when the counter reaches a certain value, start blinking like crazy
@@ -5697,6 +6024,7 @@ void flip()
   else if (count == 60)
   {
     flipper.detach();
+    count = 0;
   }
 }
 
@@ -5747,7 +6075,7 @@ String createInArray()
   String result = "";
   for (uint8_t i = 0; i < totalInputs; i++)
   {
-    result += (inputs[i].state) ? '1' : '0';
+    result += String(!inputs[i].state);
     // if (i < (totalOutputs - 1)) {
     // result += ",";
     // }
@@ -5760,13 +6088,13 @@ String createInArray()
 String createSettingArray()
 {
   String result = "";
-  result += callOnAlert ? '1' : '0';
   result += securityMode ? '1' : '0';
+  result += callOnAlert ? '1' : '0';
   result += notifyScenarios ? '1' : '0';
   result += hasWifi ? '1' : '0';
-  result += simInserted ? '1' : '0';
   result += gsmNetwork ? '1' : '0';
   result += forceUseGprs ? '1' : '0';
+  result += saveLastStates ? '1' : '0';
   return result;
 }
 
@@ -5884,6 +6212,25 @@ String createScenariosArray()
   return str;
 }
 
+String createRfArray()
+{
+  String str = "";
+  for (uint8_t i = 0; i < rfSensorCount; i++)
+  {
+    if (scenarios[i].value.length() > 0)
+    {
+      str += scenarios[i].value;
+      str += ":s";
+      str += String(i + 1);
+    }
+    if (i < (scenariosCount - 1))
+    {
+      str += ",";
+    }
+  }
+
+  return str;
+}
 
 String prepareDbData(String event)
 {
@@ -5897,7 +6244,7 @@ String prepareDbData(String event)
   doc["sets"] = createSettingArray();
   doc["tims"] = createTimersArray();
   doc["progs"] = createScenariosArray();
-
+  doc["rfS"] = createRfArray();
   doc["oSt"] = createOutArray();
   doc["iSt"] = createInArray();
   doc["pwm"] = createPwmArray();
