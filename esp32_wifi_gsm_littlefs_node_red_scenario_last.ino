@@ -929,6 +929,7 @@ void reconnect()
       // ... and resubscribe
       mqtt.subscribe(myTopic.c_str());
       mqtt_connected = true;
+      netStatusDisplay();
     }
     else
     {
@@ -1357,7 +1358,7 @@ void updateDisplay()
     // display.println("/");
   }
 
-  display.fillRect(86, 24, 42, 7, 0);
+  display.fillRect(85, 24, 42, 7, 0);
 
   if (mqtt_connected)
   {
@@ -1399,6 +1400,24 @@ void updateDisplay()
   // }
   display.display();
 }
+
+void netStatusDisplay()
+{
+  display.fillRect(85, 24, 42, 7, 0);
+
+  if (mqtt_connected)
+  {
+    display.setCursor(104, 24);
+    display.println(mqttNet == 1 ? "WIFI" : "GPRS");
+  }
+  else
+  {
+    display.setCursor(86, 24);
+    display.println("OFFLINE");
+  }
+  display.display();
+}
+
 void updateSignalDisp()
 {
   display.fillRect(100, 12, 16, 7, 0);
@@ -1504,10 +1523,7 @@ void updateStatesDSP()
 }
 void updateTempDSP()
 {
-  if (temps[lastTempShown].value == -127.0)
-  {
-    return;
-  }
+
   if (lastTempShown >= totalTemps)
   {
     lastTempShown = 0;
@@ -1519,9 +1535,19 @@ void updateTempDSP()
 
   String tmp = String(temps[lastTempShown].value);
 
-  display.drawCircle(118, 34, 1, 1);
-  display.setCursor(128 - ((tmp.length() + 2) * 6), 34);
-  display.print(tmp + " C");
+  if (temps[lastTempShown].value == -127.0)
+  {
+    display.drawCircle(118, 34, 1, 1);
+    display.setCursor(122, 34);
+    display.print("--");
+  }
+  else
+  {
+    display.drawCircle(118, 34, 1, 1);
+    display.setCursor(128 - ((tmp.length() + 2) * 6), 34);
+    display.print(tmp + " C");
+  }
+
   display.display();
   lastTempShown++;
 }
@@ -1871,10 +1897,8 @@ void setup()
     flipper.attach(1, flip);
     Serial.println("Insert a sim card");
   }
+  delay(3000);
   loadingDisplay(100, "Completed");
-
-  delay(500);
-
   // if (gsmNetwork)
   // {
   //   setupGSM();
@@ -1897,7 +1921,7 @@ void setup()
     delay(100);
   }
 
-  initDisplay();
+  reloadDisplay();
 
   checkTasks();
 
@@ -2181,195 +2205,352 @@ void switchRelay(uint8_t index, bool state, uint16_t time, bool isLocked)
   saveLastRelayStates();
 }
 
+
 void runScenarios()
 {
-  for (int i = 0; i < totalScenarios; i++)
-  {
-    Scenario scenario = scenarios[i];
-    if (scenario.value.isEmpty())
-      continue;
-    char it = scenario.value.charAt(0); // in type
-    char ot = scenario.value.charAt(1); // out type
+    float floatMargin = 0.1; // دقت مقایسه برای float
+    for (int i = 0; i < totalScenarios; i++)
+    {
+        Scenario scenario = scenarios[i];
+        if (scenario.value.isEmpty())
+            continue;
 
-    bool oCondition = false; // آیا خروجی در وضعیت هدف است؟
+        char it = scenario.value.charAt(0); // input type
+        char ot = scenario.value.charAt(1); // output type
 
-    bool conditionMet = false; // آیا شرط اجرا برقرار است؟
-    float ifStatement = 0;     // مقدار فعلی سنسور/ورودی
-    float bias = 0;            // مقدار آستانه توقف
-    int time = 0;
-    if (scenario.swType == 1)
-    { // 3 ثانیه
-      time = 3;
-    }
+        bool oCondition = false;     // وضعیت فعلی خروجی
+        bool conditionMet = false;   // آیا شرط برقرار است؟
+        float ifStatement = 0;       // مقدار ورودی
+        float bias = 0;              // آستانه توقف برای جلوگیری از لرزش
+        int time = 0;
 
-    if (it == 'o')
-    {
-      continue;
-    }
-    else if (it == 't')
-    {
-      ifStatement = temps[scenario.input].value;
-      bias = TEMP_THRESHOLD_BIAS;
-    }
-    else if (it == 'd')
-    {
-      ifStatement = mcp.digitalRead(inputs[scenario.input].gpio);
-    }
-    else if (it == 'a')
-    {
-      ifStatement = analogInputs[scenario.input].voltage;
-      bias = THRESHOLD_BIAS;
-    }
+        if (scenario.swType == 1)
+        {
+            time = 3; // زمان پیش‌فرض ۳ ثانیه
+        }
 
-    // اگر نوع خروجی دیمر باشد
-    if (ot == 'p')
-    {
-      oCondition = pwms[scenario.outPin].pwm == scenario.outState;
-    }
-    else
-    {
-      oCondition = outputs[scenario.outPin].state == scenario.outState;
-    }
+        // --- خواندن ورودی ---
+        if (it == 'o')
+        {
+            continue;
+        }
+        else if (it == 't') // دما
+        {
+            ifStatement = temps[scenario.input].value;
+            bias = TEMP_THRESHOLD_BIAS;
+        }
+        else if (it == 'd') // دیجیتال
+        {
+            ifStatement = inputs[scenario.input].state;
+        }
+        else if (it == 'a') // آنالوگ
+        {
+            ifStatement = analogInputs[scenario.input].voltage;
+            bias = THRESHOLD_BIAS;
+        }
 
-    // شرط اجرا برای ورودی دیجیتال
-    if (it == 'd' && ot == 'r')
-    {
-      if (scenario.condition == "==")
-      {
-        if ((int)ifStatement == scenario.outState)
+        // --- تعیین وضعیت فعلی خروجی ---
+        if (ot == 'p') // dimmer (PWM)
         {
-          conditionMet = true;
+            oCondition = pwms[scenario.outPin].pwm == scenario.outState;
         }
-      }
-      else if (scenario.condition == "!=" && (int)ifStatement != scenario.outState)
-      {
-        conditionMet = true;
-      }
-    }
-    // شرط اجرا برای دما
-    else if (it == 't')
-    {
-      if (oCondition)
-      {
-        if (scenario.condition == ">" && ifStatement < scenario.threshold - bias)
+        else // رله
         {
-          conditionMet = true;
+            oCondition = mcp.digitalRead(outputs[scenario.outPin].gpio) == scenario.outState;
         }
-        else if (scenario.condition == "<" && ifStatement > scenario.threshold + bias)
-        {
-          conditionMet = true;
-        }
-        else if (scenario.condition == "==" && (int)ifStatement == (int)scenario.threshold)
-        {
-          conditionMet = true;
-        }
-      }
-      else
-      {
-        if (scenario.condition == ">" && ifStatement > scenario.threshold)
-        {
-          conditionMet = true;
-        }
-        else if (scenario.condition == "<" && ifStatement < scenario.threshold)
-        {
-          conditionMet = true;
-        }
-        else if (scenario.condition == "==" && ifStatement == scenario.threshold)
-        {
-          conditionMet = true;
-        }
-      }
-    }
-    // شرط اجرا برای آنالوگ
-    else if (it == 'a')
-    {
-      if (oCondition)
-      {
-        if (scenario.condition == ">" && ifStatement < scenario.threshold - bias)
-        {
-          conditionMet = true;
-        }
-        else if (scenario.condition == "<" && ifStatement > scenario.threshold + bias)
-        {
-          conditionMet = true;
-        }
-        else if (scenario.condition == "==" && (int)ifStatement == (int)scenario.threshold)
-        {
-          conditionMet = true;
-        }
-      }
-      else
-      {
-        if (scenario.condition == ">" && ifStatement > scenario.threshold)
-        {
-          conditionMet = true;
-        }
-        else if (scenario.condition == "<" && ifStatement < scenario.threshold)
-        {
-          conditionMet = true;
-        }
-        else if (scenario.condition == "==" && ifStatement == scenario.threshold)
-        {
-          conditionMet = true;
-        }
-      }
-    }
 
-    // اجرای عملکرد اگر شرط برقرار شد
-    if (conditionMet)
-    {
-      if (ot == 'p')
-      {
-        setPwm(scenario.outPin, scenario.outState);
-      }
-      else
-      {
-        // اینجا مشکل اصلی: اگر خروجی همین الان در وضعیت هدف باشد (oCondition==true)،
-        // دوباره switchRelay اجرا نمی‌شود مگر اینکه swType!=0 باشد.
-        // پس اگر خروجی قبلاً در وضعیت هدف است و swType==0، هیچ عملی انجام نمی‌شود.
-        // این باعث می‌شود بار اول که سناریو فعال می‌شود، اگر خروجی قبلاً در وضعیت هدف باشد، هیچ تغییری رخ ندهد.
-        if (!oCondition || scenario.swType != 0)
+        // --- دیباگ لاگ‌ها (در صورت نیاز فعال کن) ---
+        
+        Serial.print("Scenario "); Serial.println(i);
+        Serial.print("Input type: "); Serial.println(it);
+        Serial.print("Input value: "); Serial.println(ifStatement);
+        Serial.print("Threshold: "); Serial.println(scenario.threshold);
+        Serial.print("Bias: "); Serial.println(bias);
+        Serial.print("Output condition: "); Serial.println(oCondition);
+        
+
+        // --- ارزیابی شرط‌ها ---
+        if (it == 'd' && ot == 'r') // دیجیتال به رله
         {
-          switchRelay(scenario.outPin, scenario.outState, time, true);
-          if (!oCondition)
-          {
-            // فقط اگر خروجی تغییر کرد، نوتیفیکیشن ارسال شود
-            if (scenario.notif == 1 && notifyScenarios)
-              notifHexSms(i, phoneNo[0]);
-            else if (scenario.notif == 2 && notifyScenarios)
-              callAdmin(i);
-          }
-          continue;
+            if (scenario.condition == "==")
+            {
+                if ((int)ifStatement == scenario.outState)
+                    conditionMet = true;
+            }
+            else if (scenario.condition == "!=")
+            {
+                if ((int)ifStatement != scenario.outState)
+                    conditionMet = true;
+            }
+        }
+        else if (it == 't' || it == 'a') // دما یا آنالوگ
+        {
+            if (scenario.condition == ">")
+            {
+                if (!oCondition && ifStatement > scenario.threshold + bias){
+                    conditionMet = true;
+                    Serial.println("!oCondition && ifStatement >");
+                }
+                else if (oCondition && ifStatement < scenario.threshold - bias){
+                  conditionMet = true;
+                    Serial.println("oCondition && ifStatement >");
+                }
+            }
+            else if (scenario.condition == "<")
+            {
+                if (!oCondition && ifStatement < scenario.threshold - bias)
+                    conditionMet = true;
+                else if (oCondition && ifStatement > scenario.threshold + bias)
+                    conditionMet = true;
+            }
+            else if (scenario.condition == "==")
+            {
+                if (abs(ifStatement - scenario.threshold) < floatMargin)
+                    conditionMet = true;
+            }
+        }
+
+        // --- اجرای عملکرد بر اساس شرط ---
+        if (conditionMet)
+        {
+            if (ot == 'p') // dimmer
+            {
+                setPwm(scenario.outPin, scenario.outState);
+            }
+            else // رله
+            {
+            Serial.println("scenario.swType != 0");
+            Serial.println(scenario.swType);
+                if (!oCondition || scenario.swType != 0)
+                {
+                    switchRelay(scenario.outPin, scenario.outState, time, true);
+                    Serial.printf("!oCondition => switch > %d",scenario.outState);
+                    if (!oCondition) // فقط وقتی تغییر کرد نوتیف بفرست
+                    {
+                        if (scenario.notif == 1 && notifyScenarios)
+                            notifHexSms(i, phoneNo[0]);
+                        else if (scenario.notif == 2 && notifyScenarios)
+                            callAdmin(i);
+                    }
+                }
+                else
+                {
+                    switchRelay(scenario.outPin, scenario.outState, time, true);
+                    Serial.printf("oCondition => switch > %d",scenario.outState);
+                    if (scenario.notif == 1 && notifyScenarios)
+                        notifHexSms(i, phoneNo[0]);
+                    else if (scenario.notif == 2 && notifyScenarios)
+                        callAdmin(i);
+                }
+            }
         }
         else
         {
-          switchRelay(scenario.outPin, scenario.outState, time, true);
-          if (scenario.notif == 1 && notifyScenarios)
-          {
-            notifHexSms(i, phoneNo[0]);
-          }
-          else if (scenario.notif == 2 && notifyScenarios)
-          {
-            callAdmin(i);
-          }
-          continue;
+            // وقتی شرط برقرار نیست
+            if (scenario.condition == "==")
+            {
+                switchRelay(scenario.outPin, !scenario.outState, time, true);
+            }
+            else
+            {
+                switchRelay(scenario.outPin, scenario.outState, time, true);
+            }
         }
-      }
     }
-    else
-    {
-      // برای ورودی دیجیتال
-      if (scenario.condition == "==")
-      {
-        switchRelay(scenario.outPin, !scenario.outState, time, true);
-      }
-      else
-      {
-        switchRelay(scenario.outPin, scenario.outState, time, true);
-      }
-    }
-  }
 }
+
+// void runScenarios()
+// {
+//   for (int i = 0; i < totalScenarios; i++)
+//   {
+//     Scenario scenario = scenarios[i];
+//     if (scenario.value.isEmpty())
+//       continue;
+//     char it = scenario.value.charAt(0); // in type
+//     char ot = scenario.value.charAt(1); // out type
+
+//     bool oCondition = false; // آیا خروجی در وضعیت هدف است؟
+
+//     bool conditionMet = false; // آیا شرط اجرا برقرار است؟
+//     float ifStatement = 0;     // مقدار فعلی سنسور/ورودی
+//     float bias = 0;            // مقدار آستانه توقف
+//     int time = 0;
+//     if (scenario.swType == 1)
+//     { // 3 ثانیه
+//       time = 3;
+//     }
+
+//     if (it == 'o')
+//     {
+//       continue;
+//     }
+//     else if (it == 't')
+//     {
+//       ifStatement = temps[scenario.input].value;
+//       bias = TEMP_THRESHOLD_BIAS;
+//     }
+//     else if (it == 'd')
+//     {
+//       ifStatement = !inputs[scenario.input].state;
+//       // mcp.digitalRead(inputs[scenario.input].gpio);
+//     }
+//     else if (it == 'a')
+//     {
+//       ifStatement = analogInputs[scenario.input].voltage;
+//       bias = THRESHOLD_BIAS;
+//     }
+
+//     Serial.print("ifStatement: ");
+//     Serial.println(ifStatement);
+//     Serial.print("threshold: ");
+//     Serial.println(scenario.threshold);
+//     Serial.print("oCondition: ");
+//     Serial.println(oCondition);
+
+//     // اگر نوع خروجی دیمر باشد
+//     if (ot == 'p')
+//     {
+//       oCondition = pwms[scenario.outPin].pwm == scenario.outState;
+//     }
+//     else
+//     {
+//       oCondition = outputs[scenario.outPin].state == scenario.outState;
+//     }
+
+//     // شرط اجرا برای ورودی دیجیتال
+//     if (it == 'd' && ot == 'r')
+//     {
+//       if (scenario.condition == "==")
+//       {
+//         if ((int)ifStatement == scenario.outState)
+//         {
+//           conditionMet = true;
+//         }
+//       }
+//       else if (scenario.condition == "!=" && (int)ifStatement != scenario.outState)
+//       {
+//         conditionMet = true;
+//       }
+//     }
+//     // شرط اجرا برای دما
+//     else if (it == 't')
+//     {
+//       if (oCondition)
+//       {
+//         if (scenario.condition == ">" && ifStatement < scenario.threshold - bias)
+//         {
+//           conditionMet = true;
+//         }
+//         else if (scenario.condition == "<" && ifStatement > scenario.threshold + bias)
+//         {
+//           conditionMet = true;
+//         }
+//         else if (scenario.condition == "==" && (int)ifStatement == (int)scenario.threshold)
+//         {
+//           conditionMet = true;
+//         }
+//       }
+//       else
+//       {
+//         if (scenario.condition == ">" && ifStatement > scenario.threshold)
+//         {
+//           conditionMet = true;
+//         }
+//         else if (scenario.condition == "<" && ifStatement < scenario.threshold)
+//         {
+//           conditionMet = true;
+//         }
+//         else if (scenario.condition == "==" && ifStatement == scenario.threshold)
+//         {
+//           conditionMet = true;
+//         }
+//       }
+//     }
+//     // شرط اجرا برای آنالوگ
+//     else if (it == 'a')
+//     {
+//       if (oCondition)
+//       {
+//         if (scenario.condition == ">" && ifStatement < scenario.threshold - bias)
+//         {
+//           conditionMet = true;
+//         }
+//         else if (scenario.condition == "<" && ifStatement > scenario.threshold + bias)
+//         {
+//           conditionMet = true;
+//         }
+//         else if (scenario.condition == "==" && (int)ifStatement == (int)scenario.threshold)
+//         {
+//           conditionMet = true;
+//         }
+//       }
+//       else
+//       {
+//         if (scenario.condition == ">" && ifStatement > scenario.threshold)
+//         {
+//           conditionMet = true;
+//         }
+//         else if (scenario.condition == "<" && ifStatement < scenario.threshold)
+//         {
+//           conditionMet = true;
+//         }
+//         else if (scenario.condition == "==" && ifStatement == scenario.threshold)
+//         {
+//           conditionMet = true;
+//         }
+//       }
+//     }
+
+//     // اجرای عملکرد اگر شرط برقرار شد
+//     if (conditionMet)
+//     {
+//       if (ot == 'p')
+//       {
+//         setPwm(scenario.outPin, scenario.outState);
+//       }
+//       else
+//       {
+//         if (!oCondition || scenario.swType != 0)
+//         {
+//           switchRelay(scenario.outPin, scenario.outState, time, true);
+//           if (!oCondition)
+//           {
+//             // فقط اگر خروجی تغییر کرد، نوتیفیکیشن ارسال شود
+//             if (scenario.notif == 1 && notifyScenarios)
+//               notifHexSms(i, phoneNo[0]);
+//             else if (scenario.notif == 2 && notifyScenarios)
+//               callAdmin(i);
+//           }
+//           continue;
+//         }
+//         else
+//         {
+//           switchRelay(scenario.outPin, scenario.outState, time, true);
+//           if (scenario.notif == 1 && notifyScenarios)
+//           {
+//             notifHexSms(i, phoneNo[0]);
+//           }
+//           else if (scenario.notif == 2 && notifyScenarios)
+//           {
+//             callAdmin(i);
+//           }
+//           continue;
+//         }
+//       }
+//     }
+//     else
+//     {
+//       if (scenario.condition == "==")
+//       {
+//         switchRelay(scenario.outPin, !scenario.outState, time, true);
+//       }
+//       else
+//       {
+//         switchRelay(scenario.outPin, scenario.outState, time, true);
+//       }
+//     }
+//   }
+// }
 
 void notifHexSms(int index, String phone)
 {
@@ -3888,9 +4069,9 @@ void checkMqttStatus()
   {
     mqtt_connected = false;
   }
-  // else if (hasWifi || gprsConnected)
+  // else if ((hasWifi || gprsConnected ))
   // {
-  //   reconnect();
+  // reconnect();
   // }
 }
 
@@ -4800,10 +4981,10 @@ void checkTasks()
 
     uint8_t gsmCounter = 0;
     setAverageElement();
-
+    mqtt_count = 0;
     if (hasWifi)
     {
-      if (WiFi.status() != WL_CONNECTED && wifiTryCount < 2)
+      if (WiFi.status() != WL_CONNECTED && wifiTryCount < 3)
       {
         initWiFi();
       }
@@ -4816,7 +4997,7 @@ void checkTasks()
         // }
       }
     }
-    else if (ssid != "" && password != "" && wifiTryCount < 2)
+    else if (ssid != "" && password != "" && wifiTryCount < 3)
     {
       initWiFi();
     }
@@ -4841,14 +5022,14 @@ void checkTasks()
 
   if (minCounter % 5 == 0)
   {
-    if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 2)
+    if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 3)
     {
       initWiFi();
     }
   }
   if (minCounter % 2 == 0)
   {
-    if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 2)
+    if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 3)
     {
       initWiFi();
     }
@@ -5174,6 +5355,11 @@ void setAverageElement()
   for (uint8_t i = 0; i < totalTemps; i++)
   {
     temps[i].buffer[(minCounter / 10) - 1] = temps[i].temp;
+  }
+  for (int i = 0; i < WINDOW_SIZE; i++)
+  {
+    Serial.printf("temps[0].buffer[%d]", i);
+    Serial.println(temps[0].buffer[i]);
   }
   /// Current Average
   // currentAmp.buffer[(minCounter / 10) - 1] = currentAmp.value;
@@ -5821,11 +6007,12 @@ String outputIsBusy(uint8_t index)
     if (scenario.value.isEmpty() || scenario.value.charAt(0) == 'o')
       continue;
     uint8_t target = 100;
-    if (index == scenario.input)
-    {
-      target = scenario.outPin;
-    }
-    else if (index == scenario.outPin)
+    // if (index == scenario.input)
+    // {
+    //   target = scenario.outPin;
+    // }
+    // else
+    if (index == scenario.outPin)
     {
       target = scenario.input;
     }
@@ -6189,7 +6376,7 @@ String createTimersArray()
       str += ",";
     }
   }
-  Serial.println(str);
+  // Serial.println(str);
   return str;
 }
 String createScenariosArray()
