@@ -7,7 +7,7 @@
 
 #define DEVICE_MODEL "G84-TR"
 
-const short VERSION = 2;
+const short F_VERSION = 3;
 
 #include <WiFi.h>
 #include <ESPmDNS.h>
@@ -84,7 +84,7 @@ Adafruit_MCP23X17 mcp;
 #include <DallasTemperature.h>
 
 // GPIO where the DS18B20 is connected to
-const uint8_t oneWireBus = 34;
+const uint8_t oneWireBus = 32;
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(oneWireBus);
 
@@ -99,7 +99,7 @@ RCSwitch mySwitch = RCSwitch();
 
 EnergyMonitor emon;
 
-const int ctPin = 33;              // پین متصل به سنسور CT
+const int ctPin = 34;              // پین متصل به سنسور CT
 const double assumedVoltage = 220; // ولتاژ فرضی برای محاسبه توان
 
 unsigned long lastSampleTime = 0;
@@ -196,6 +196,7 @@ struct Scenario
   uint8_t swType;   // ب2 برای لحظه ای ، 1 برای 3 ثانیه و 0 برای لچ
   uint8_t notif;    // 0 for off, 1 > sms , 2 >call
   unsigned long lastNotif;
+  bool active;
 };
 struct Input
 {
@@ -204,6 +205,7 @@ struct Input
   String label;
   float voltage;
   boolean state;
+  boolean mode; // 0 for 0 high and 1 for 1 high
   uint8_t gpio;
   unsigned long lastTrigger;
   float avg;
@@ -219,19 +221,19 @@ String phoneNo[totalPhoneNo] = {"", "", "", "", ""};
 int8_t toggleTimers[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
 
 Input inputs[totalInputs] = {
-    {"il1", "in1", "", 0.0, 1, 7, 0, 0.0, {}},
-    {"il2", "in2", "", 0.0, 1, 6, 0, 0.0, {}},
-    {"il3", "in3", "", 0.0, 1, 5, 0, 0.0, {}},
-    {"il4", "in4", "", 0.0, 1, 4, 0, 0.0, {}},
-    {"il5", "in5", "", 0.0, 1, 3, 0, 0.0, {}},
-    {"il6", "in6", "", 0.0, 1, 2, 0, 0.0, {}},
-    {"il7", "in7", "", 0.0, 1, 1, 0, 0.0, {}},
-    {"il8", "in8", "", 0.0, 1, 0, 0, 0.0, {}},
+    {"il1", "in1", "", 0.0, 1,0, 7, 0, 0.0, {}},
+    {"il2", "in2", "", 0.0, 1,0, 6, 0, 0.0, {}},
+    {"il3", "in3", "", 0.0, 1,0, 5, 0, 0.0, {}},
+    {"il4", "in4", "", 0.0, 1,0, 4, 0, 0.0, {}},
+    {"il5", "in5", "", 0.0, 1,0, 3, 0, 0.0, {}},
+    {"il6", "in6", "", 0.0, 1,0, 2, 0, 0.0, {}},
+    {"il7", "in7", "", 0.0, 1,0, 1, 0, 0.0, {}},
+    {"il8", "in8", "", 0.0, 1,0, 0, 0, 0.0, {}},
 };
 
 Input analogInputs[totalAnalogs] = {
-    {"al1", "a1", "", 0, 0, 36, 0, 0.0, {}},
-    {"al2", "a2", "", 0, 0, 39, 0, 0.0, {}}};
+    {"al1", "a1", "", 0, 0,0, 36, 0, 0.0, {}},
+    {"al2", "a2", "", 0, 0,0, 35, 0, 0.0, {}}};
 
 output outputs[totalOutputs] = {
     {"lab1", "sch1", 8, 1, "", "", 0, 0, 0},
@@ -241,7 +243,7 @@ output outputs[totalOutputs] = {
     {"lab5", "sch5", 12, 1, "", "", 0, 0, 0},
     {"lab6", "sch6", 13, 1, "", "", 0, 0, 0},
     {"lab7", "sch7", 14, 1, "", "", 0, 0, 0},
-    {"lab8", "sch8", 14, 1, "", "", 0, 0, 0},
+    {"lab8", "sch8", 15, 1, "", "", 0, 0, 0},
 };
 
 output pwms[totalPwm] = {
@@ -293,14 +295,12 @@ AsyncWebServer server(80);
 AsyncEventSource events("/events");
 
 // a string to hold NTP server to request epoch time
-// const char *ntpServer = "europe.pool.ntp.org";
+
 const char *ntpServer[3] = {
     "pool.ntp.org",
     "time.nist.gov",
     "europe.pool.ntp.org"};
-// const char *ntpServer1 =  "europe.pool.ntp.org";
-// const char *ntpServer2 = "pool.ntp.org";
-// const char *ntpServer3 = "time.google.com";
+
 const long gmtOffset_sec = 12600;
 const int daylightOffset_sec = 0;
 // Variable to hold current epoch timestamp
@@ -327,12 +327,8 @@ ESP32Time rtc(0); // offset in seconds GMT+1
 #define rxPin 16 // 1
 #define txPin 17 // 2
 
-// #define SENSOR_1 18
-// #define SENSOR_2 19
-// #define SENSOR_3 21
-// #define SENSOR_4 22
-
 #define BUTTON_PIN 25
+#define OLED_PIN 14
 #include <Bounce2.h>
 Bounce2::Button button = Bounce2::Button();
 
@@ -346,10 +342,6 @@ String outStates = "";
 String inStates = "";
 String pwmStates = "";
 
-// boolean STATE_RELAY_1 = 0;
-// boolean STATE_RELAY_2 = 0;
-// boolean STATE_RELAY_3 = 0;
-// boolean STATE_RELAY_4 = 0;
 // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
 String smsStatus, senderNumber, receivedDate, msg, date = "";
 boolean smsIsReady = false;
@@ -370,16 +362,14 @@ bool callOnAlert = true;
 bool securityMode = false;
 bool notifyScenarios = true;
 bool alerting = false;
+
+uint8_t alertOutputs[] = {0};
 uint8_t remoteGroupCount = 0;
 uint8_t remoteCount = 0;
 uint8_t rfSensorCount = 0;
 
 unsigned long now = millis();
 unsigned long lastTrigger = 0;
-// unsigned long pressStartTime1 = 0;
-// unsigned long pressStartTime2 = 0;
-// unsigned long pressStartTime3 = 0;
-// unsigned long pressStartTime4 = 0;
 
 // boolean remoteFlag = 0;
 
@@ -485,6 +475,25 @@ void callback(char *topic, byte *payload, unsigned int length)
 
     ///////////////////////////////////////////////////////////////////////////
   }
+  else if(event == "inType"){
+        String type = doc["type"].as<String>();
+
+      inputs[out].mode = type == "1" ?  1 : 0;
+        writeToEEPROM("iT", inStates); // sls save last sat
+
+       if (mqtt_connected)
+    {
+      DynamicJsonDocument doc(64);
+      doc["mac"] = mac;
+      doc["event"] = "feedback";
+      doc["iSt"] = createInArray();
+      String result;
+      serializeJson(doc, result);
+      Serial.println(result);
+      publishReport(result.c_str());
+    }
+
+  }
   else if (event == "son")
   {
     // bool flag = 0;
@@ -511,6 +520,30 @@ void callback(char *topic, byte *payload, unsigned int length)
   }
   else if (event == "soff")
   {
+
+    alerting = false;
+    // index of security output alert
+    for (uint8_t i = 0; i < sizeof(alertOutputs) / sizeof(alertOutputs[0]); i++)
+    {
+      switchRelay(alertOutputs[i], false, 0, true);
+    }
+    if (mqtt_connected)
+    {
+      DynamicJsonDocument doc(64);
+      doc["mac"] = mac;
+      doc["event"] = "security";
+      doc["iSt"] = createInArray();
+      doc["alerting"] = false;
+      String result;
+      serializeJson(doc, result);
+      Serial.println(result);
+      publishReport(result.c_str());
+    }
+    if (simInserted && phoneNo[0] != "")
+    {
+      ReplyHex("آژیر دزدگیر خاموش شد", phoneNo[0]);
+    }
+
     // bool flag = 0;
     // for (uint8_t i = 0; totalInputs < 4; i++) {
     //   if (inputs[i].value.charAt(0) == 's') {
@@ -544,6 +577,24 @@ void callback(char *topic, byte *payload, unsigned int length)
     Serial.println(value);
     if (value.length() == 7)
     {
+      if (securityMode && value[0] == '0')
+      {
+        alerting = false;
+        // index of security output alert
+        for (uint8_t i = 0; i < sizeof(alertOutputs) / sizeof(alertOutputs[0]); i++)
+        {
+          switchRelay(alertOutputs[i], false, 0, true);
+        }
+      }
+      if (!saveLastStates && value[6] == '1')
+      {
+        writeToEEPROM("sls", "1"); // sls save last sat
+      }
+      else if (saveLastStates && value[6] == '0')
+      {
+        writeToEEPROM("sls", "0"); // sls save last sat
+      }
+
       securityMode = value[0] == '1';
       callOnAlert = value[1] == '1';
       notifyScenarios = value[2] == '1';
@@ -684,6 +735,33 @@ void callback(char *topic, byte *payload, unsigned int length)
 
     ///////////////////////////////////////////////////////////////////////////
   }
+  else if (event == "scnState")
+  {
+    String key = doc["key"].as<String>();
+    bool active = doc["active"].as<bool>();
+    for (int i = 0; i < totalScenarios; i++)
+    {
+      if (key == scenarios[i].key)
+      {
+        // مقدار سناریو را با وضعیت جدید ذخیره کن
+        String val = scenarios[i].value;
+        int lastColon = val.lastIndexOf(':');
+        if (lastColon != -1)
+        {
+          val = val.substring(0, lastColon);
+        }
+        val += ":" + String(active ? 1 : 0);
+        scenarios[i].value = val;
+        scenarios[i].active = active;
+        writeDateTimeEEPROM(key.c_str(), val);
+        Serial.printf("Scenario %s active status updated to %d\n", key.c_str(), active);
+        break;
+      }
+    }
+    // ارسال فیدبک
+    String result = prepareDbData("feedback");
+    publishReport(result.c_str());
+  }
   else if (event == "status")
   {
     String result = prepareDbData("feedback");
@@ -698,7 +776,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     int newVer = doc["version"].as<short>();
     Serial.println("Url:");
     Serial.println(url);
-    if (newVer > VERSION)
+    if (newVer > F_VERSION)
     {
       checkUpdate(url);
     }
@@ -708,7 +786,7 @@ void callback(char *topic, byte *payload, unsigned int length)
       doc["mac"] = mac;
       doc["event"] = "feedback";
       doc["update"] = false;
-      doc["version"] = VERSION;
+      doc["version"] = F_VERSION;
       doc.remove("url");
       String result;
       serializeJson(doc, result);
@@ -1056,10 +1134,17 @@ bool initWiFi()
   unsigned long currentMillis = millis();
   previousMillis = currentMillis;
 
+  // if (WiFi.status() != WL_CONNECTED)
+  // {
+  //   Serial.println("Failed to connect.");
+  //   digitalWrite(STATUS_LED, LOW);
+  //   return false;
+  // }
+
   while (WiFi.status() != WL_CONNECTED)
   {
     currentMillis = millis();
-    if (currentMillis - previousMillis >= 10000)
+    if (currentMillis - previousMillis >= 5000)
     {
       digitalWrite(STATUS_LED, LOW);
 
@@ -1074,6 +1159,7 @@ bool initWiFi()
   { // Set the hostname to "esp32.local"
     Serial.println("Error setting up MDNS responder!");
   }
+
   Serial.print("Current ESP32 IP: ");
   Serial.println(WiFi.localIP());
   hasWifi = true;
@@ -1083,7 +1169,7 @@ bool initWiFi()
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send_P(200, "text/html", index_html, processor); });
-  server.serveStatic("/", LittleFS, "/");
+  // server.serveStatic("/", LittleFS, "/");// uncomment
 
   server.on(
       "/sw", HTTP_POST, [](AsyncWebServerRequest *request)
@@ -1211,6 +1297,7 @@ bool initWiFi()
   server.begin();
   return true;
 }
+
 bool addTask(void (*taskFunction)(), unsigned long delay)
 {
   if (taskCount >= MAX_TASKS)
@@ -1227,6 +1314,11 @@ bool addTask(void (*taskFunction)(), unsigned long delay)
 
 void setupLCD()
 {
+
+  // ledcSetup(2, freq, 8);
+  // ledcAttachPin(OLED_PIN, 2);
+  //     ledcWrite(2, 122);
+
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
   { // Address 0x3D for 128x64
     Serial.println(F("SSD1306 allocation failed"));
@@ -1239,7 +1331,10 @@ void setupLCD()
 
 void initDisplay()
 {
-
+  //   for (uint8_t i = 0; i < 255; i++)
+  // {
+  //   ledcWrite(2, i);
+  // }
   display.clearDisplay();
 
   // display.setCursor(2, 14);
@@ -1528,18 +1623,17 @@ void updateTempDSP()
   {
     lastTempShown = 0;
   }
-  display.fillRect(26, 34, 102, 8, 0);
+  display.fillRect(26, 34, 106, 8, 0);
   display.setTextColor(WHITE);
   display.setCursor(2, 34);
   display.print("TEMP " + String(lastTempShown + 1));
 
   String tmp = String(temps[lastTempShown].value);
 
-  if (temps[lastTempShown].value == -127.0)
+  if (temps[lastTempShown].temp == -127.0)
   {
-    display.drawCircle(118, 34, 1, 1);
-    display.setCursor(122, 34);
-    display.print("--");
+    display.setCursor(118, 34);
+    display.print("-");
   }
   else
   {
@@ -1566,6 +1660,8 @@ void loadingDisplay(int progress, String title)
 
   display.setTextSize(1);
   display.setTextWrap(0);
+  display.setCursor(110, 22);
+  display.println("v" + String(F_VERSION));
   display.setCursor(34, 31);
   display.println(title + "..");
   display.drawRect(20, 42, 90, 16, 1);
@@ -1731,7 +1827,8 @@ void setup()
 {
   EEPROM.begin("esp");
   // REMOTES.begin("remotes");
-
+  pinMode(OLED_PIN, OUTPUT);
+  digitalWrite(OLED_PIN, HIGH);
   // aes128.setKey(aes_key, 16);  // Setting Key for AES
 
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
@@ -1740,9 +1837,8 @@ void setup()
 
   setupLCD();
 
-  delay(1000);
   Serial.print("Firmware Version=>");
-  Serial.println(VERSION);
+  Serial.println(F_VERSION);
 
   Serial.print("free Entries: ");
   Serial.println(EEPROM.freeEntries());
@@ -1761,7 +1857,7 @@ void setup()
   GsmReset();
 
   // modem.init();
-  delay(3000);
+  delay(2000);
   esp_task_wdt_init(100, true); // timeout = 5 ثانیه، ریست سیستم در صورت تایم‌اوت
   esp_task_wdt_add(NULL);
 
@@ -1808,6 +1904,10 @@ void setup()
   }
   else
   {
+    saveLastStates = readFromEEPROM("sls") == "1";
+    Serial.println("saveLastStates"); // sls save last sat
+    Serial.println(saveLastStates);   // sls save last sat
+
     if (saveLastStates)
     {
       outStates = readFromEEPROM("state");
@@ -1817,7 +1917,7 @@ void setup()
       createOutArray();
     }
 
-    delay(1000);
+    delay(500);
     for (uint8_t i = 0; i < totalOutputs; i++)
     {
       // switchRelay(i, outputs[i].state);
@@ -1897,8 +1997,9 @@ void setup()
     flipper.attach(1, flip);
     Serial.println("Insert a sim card");
   }
-  delay(3000);
   loadingDisplay(100, "Completed");
+  display.clearDisplay();
+
   // if (gsmNetwork)
   // {
   //   setupGSM();
@@ -2064,7 +2165,7 @@ void checkRelayTimes()
       for (int j = 0; j < totalScenarios; j++)
       {
         Scenario scenario = scenarios[j];
-        if (scenario.value.isEmpty() || scenario.value.charAt(0) != 'o')
+        if (scenario.value.isEmpty() || !scenario.active || scenario.value.charAt(0) != 'o')
           continue;
         uint8_t target = 100;
         if (i == scenario.input)
@@ -2127,7 +2228,7 @@ void switchRelay(uint8_t index, bool state, uint16_t time, bool isLocked)
   for (int i = 0; i < totalScenarios; i++)
   {
     Scenario scenario = scenarios[i];
-    if (scenario.value.isEmpty() || scenario.value.charAt(0) != 'o')
+    if (scenario.value.isEmpty() || !scenario.active || scenario.value.charAt(0) != 'o')
       continue;
     uint8_t target = 100;
     if (index == scenario.input)
@@ -2205,158 +2306,182 @@ void switchRelay(uint8_t index, bool state, uint16_t time, bool isLocked)
   saveLastRelayStates();
 }
 
-
 void runScenarios()
 {
-    float floatMargin = 0.1; // دقت مقایسه برای float
-    for (int i = 0; i < totalScenarios; i++)
+  float floatMargin = 0.1; // دقت مقایسه برای float
+  for (int i = 0; i < totalScenarios; i++)
+  {
+    Scenario scenario = scenarios[i];
+
+    if (scenario.value.isEmpty() || !scenario.active)
+      continue;
+
+    char it = scenario.value.charAt(0); // input type
+    char ot = scenario.value.charAt(1); // output type
+
+    bool oCondition = false;   // وضعیت فعلی خروجی
+    bool conditionMet = false; // آیا شرط برقرار است؟
+    float ifStatement = 0;     // مقدار ورودی
+    float bias = 0;            // آستانه توقف برای جلوگیری از لرزش
+    int time = 0;
+    boolean targetState = 0;
+
+    if (scenario.swType == 1)
     {
-        Scenario scenario = scenarios[i];
-        if (scenario.value.isEmpty())
-            continue;
-
-        char it = scenario.value.charAt(0); // input type
-        char ot = scenario.value.charAt(1); // output type
-
-        bool oCondition = false;     // وضعیت فعلی خروجی
-        bool conditionMet = false;   // آیا شرط برقرار است؟
-        float ifStatement = 0;       // مقدار ورودی
-        float bias = 0;              // آستانه توقف برای جلوگیری از لرزش
-        int time = 0;
-
-        if (scenario.swType == 1)
-        {
-            time = 3; // زمان پیش‌فرض ۳ ثانیه
-        }
-
-        // --- خواندن ورودی ---
-        if (it == 'o')
-        {
-            continue;
-        }
-        else if (it == 't') // دما
-        {
-            ifStatement = temps[scenario.input].value;
-            bias = TEMP_THRESHOLD_BIAS;
-        }
-        else if (it == 'd') // دیجیتال
-        {
-            ifStatement = inputs[scenario.input].state;
-        }
-        else if (it == 'a') // آنالوگ
-        {
-            ifStatement = analogInputs[scenario.input].voltage;
-            bias = THRESHOLD_BIAS;
-        }
-
-        // --- تعیین وضعیت فعلی خروجی ---
-        if (ot == 'p') // dimmer (PWM)
-        {
-            oCondition = pwms[scenario.outPin].pwm == scenario.outState;
-        }
-        else // رله
-        {
-            oCondition = mcp.digitalRead(outputs[scenario.outPin].gpio) == scenario.outState;
-        }
-
-        // --- دیباگ لاگ‌ها (در صورت نیاز فعال کن) ---
-        
-        Serial.print("Scenario "); Serial.println(i);
-        Serial.print("Input type: "); Serial.println(it);
-        Serial.print("Input value: "); Serial.println(ifStatement);
-        Serial.print("Threshold: "); Serial.println(scenario.threshold);
-        Serial.print("Bias: "); Serial.println(bias);
-        Serial.print("Output condition: "); Serial.println(oCondition);
-        
-
-        // --- ارزیابی شرط‌ها ---
-        if (it == 'd' && ot == 'r') // دیجیتال به رله
-        {
-            if (scenario.condition == "==")
-            {
-                if ((int)ifStatement == scenario.outState)
-                    conditionMet = true;
-            }
-            else if (scenario.condition == "!=")
-            {
-                if ((int)ifStatement != scenario.outState)
-                    conditionMet = true;
-            }
-        }
-        else if (it == 't' || it == 'a') // دما یا آنالوگ
-        {
-            if (scenario.condition == ">")
-            {
-                if (!oCondition && ifStatement > scenario.threshold + bias){
-                    conditionMet = true;
-                    Serial.println("!oCondition && ifStatement >");
-                }
-                else if (oCondition && ifStatement < scenario.threshold - bias){
-                  conditionMet = true;
-                    Serial.println("oCondition && ifStatement >");
-                }
-            }
-            else if (scenario.condition == "<")
-            {
-                if (!oCondition && ifStatement < scenario.threshold - bias)
-                    conditionMet = true;
-                else if (oCondition && ifStatement > scenario.threshold + bias)
-                    conditionMet = true;
-            }
-            else if (scenario.condition == "==")
-            {
-                if (abs(ifStatement - scenario.threshold) < floatMargin)
-                    conditionMet = true;
-            }
-        }
-
-        // --- اجرای عملکرد بر اساس شرط ---
-        if (conditionMet)
-        {
-            if (ot == 'p') // dimmer
-            {
-                setPwm(scenario.outPin, scenario.outState);
-            }
-            else // رله
-            {
-            Serial.println("scenario.swType != 0");
-            Serial.println(scenario.swType);
-                if (!oCondition || scenario.swType != 0)
-                {
-                    switchRelay(scenario.outPin, scenario.outState, time, true);
-                    Serial.printf("!oCondition => switch > %d",scenario.outState);
-                    if (!oCondition) // فقط وقتی تغییر کرد نوتیف بفرست
-                    {
-                        if (scenario.notif == 1 && notifyScenarios)
-                            notifHexSms(i, phoneNo[0]);
-                        else if (scenario.notif == 2 && notifyScenarios)
-                            callAdmin(i);
-                    }
-                }
-                else
-                {
-                    switchRelay(scenario.outPin, scenario.outState, time, true);
-                    Serial.printf("oCondition => switch > %d",scenario.outState);
-                    if (scenario.notif == 1 && notifyScenarios)
-                        notifHexSms(i, phoneNo[0]);
-                    else if (scenario.notif == 2 && notifyScenarios)
-                        callAdmin(i);
-                }
-            }
-        }
-        else
-        {
-            // وقتی شرط برقرار نیست
-            if (scenario.condition == "==")
-            {
-                switchRelay(scenario.outPin, !scenario.outState, time, true);
-            }
-            else
-            {
-                switchRelay(scenario.outPin, scenario.outState, time, true);
-            }
-        }
+      time = 3; // زمان پیش‌فرض ۳ ثانیه
     }
+
+    // --- خواندن ورودی ---
+    if (it == 'o')
+    {
+      continue;
+    }
+    else if (it == 't') // دما
+    {
+      ifStatement = temps[scenario.input].value;
+      bias = TEMP_THRESHOLD_BIAS;
+    }
+    else if (it == 'd') // دیجیتال
+    {
+      ifStatement = inputs[scenario.input].state;
+    }
+    else if (it == 'a') // آنالوگ
+    {
+      ifStatement = analogInputs[scenario.input].voltage;
+      bias = THRESHOLD_BIAS;
+    }
+
+    // --- تعیین وضعیت فعلی خروجی ---
+    if (ot == 'p') // dimmer (PWM)
+    {
+      oCondition = pwms[scenario.outPin].pwm == scenario.outState;
+    }
+    else // رله
+    {
+      // Serial.println("states:");
+      // Serial.println(scenario.outPin);
+      // Serial.println(outputs[scenario.outPin].gpio);
+      // Serial.println(mcp.digitalRead(outputs[scenario.outPin].gpio));
+      // Serial.println(scenario.outState);
+
+      oCondition = mcp.digitalRead(outputs[scenario.outPin].gpio) == scenario.outState;
+    }
+
+    // --- دیباگ لاگ‌ها (در صورت نیاز فعال کن) ---
+
+    // Serial.print("Scenario ");
+    // Serial.println(i);
+    // Serial.print("Input type: ");
+    // Serial.println(it);
+    // Serial.print("Input value: ");
+    // Serial.println(ifStatement);
+    // Serial.print("Threshold: ");
+    // Serial.println(scenario.threshold);
+    // Serial.print("Bias: ");
+    // Serial.println(bias);
+    // Serial.print("Output condition: ");
+    // Serial.println(oCondition);
+
+    // --- ارزیابی شرط‌ها ---
+    if (it == 'd' && ot == 'r') // دیجیتال به رله
+    {
+      if (scenario.condition == "==")
+      {
+        if ((int)ifStatement == scenario.outState)
+          conditionMet = true;
+      }
+      else if (scenario.condition == "!=")
+      {
+        if ((int)ifStatement != scenario.outState)
+          conditionMet = true;
+      }
+    }
+    else if (it == 't' || it == 'a') // دما یا آنالوگ
+    {
+      if (scenario.condition == ">")
+      {
+        if (ifStatement > scenario.threshold)
+        {
+          conditionMet = true;
+          targetState = scenario.outState;
+
+          // Serial.println("!oCondition && ifStatement >");
+        }
+        else if (ifStatement < scenario.threshold - bias)
+        {
+          // conditionMet = true;
+          targetState = !scenario.outState;
+          // Serial.println("oCondition && ifStatement >");
+        }
+      }
+      else if (scenario.condition == "<")
+      {
+        if (ifStatement < scenario.threshold)
+        {
+          conditionMet = true;
+          targetState = scenario.outState;
+        }
+
+        else if (ifStatement > scenario.threshold + bias)
+        {
+          // conditionMet = true;
+          targetState = !scenario.outState;
+        }
+      }
+      else if (scenario.condition == "==")
+      {
+        if (abs(ifStatement - scenario.threshold) < floatMargin)
+          conditionMet = true;
+        targetState = scenario.outState;
+      }
+    }
+
+    // --- اجرای عملکرد بر اساس شرط ---
+    if (conditionMet)
+    {
+      if (ot == 'p') // dimmer
+      {
+        setPwm(scenario.outPin, scenario.outState);
+      }
+      else // رله
+      {
+        // عملیات  خروجی انجام نشده است
+        if (!oCondition || scenario.swType != 0)
+        {
+          switchRelay(scenario.outPin, targetState, time, true);
+          // Serial.printf("!oCondition => switch > %d", scenario.outState);
+          if (!oCondition) // فقط وقتی تغییر کرد نوتیف بفرست
+          {
+            if (scenario.notif == 1 && notifyScenarios)
+              notifHexSms(i, phoneNo[0]);
+            else if (scenario.notif == 2 && notifyScenarios)
+              callAdmin(i);
+          }
+        }
+        else // عملیات  خروجی انجام شده است
+        {
+          // switchRelay(scenario.outPin, targetState, time, true);
+          // Serial.printf("oCondition => switch > %d", scenario.outState);
+          if (scenario.notif == 1 && notifyScenarios)
+            notifHexSms(i, phoneNo[0]);
+          else if (scenario.notif == 2 && notifyScenarios)
+            callAdmin(i);
+        }
+      }
+    }
+    else
+    {
+      // وقتی شرط برقرار نیست
+      if (scenario.condition == "==")
+      {
+        switchRelay(scenario.outPin, !scenario.outState, time, true);
+      }
+      else
+      {
+        // switchRelay(scenario.outPin, !scenario.outState, time, true);
+      }
+    }
+  }
 }
 
 // void runScenarios()
@@ -2723,6 +2848,12 @@ void setupVariables()
       Serial.println(String(i + 1) + ": " + inputs[i].label);
     }
   }
+
+       inStates =   readFromEEPROM("iT"); // input types
+       Serial.printf("inStates : %s" , inStates);
+  for (uint8_t i = 0; i < totalInputs; i++){
+     inputs[i].mode = inStates[i] == '1' ? 1 : 0;
+  }
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
   Serial.println("List of Remotes");
   countRfSensorsInRemoteFile();
@@ -2844,6 +2975,7 @@ bool processScenarios(String command, uint8_t index)
   int comma3 = command.indexOf(':', comma2 + 1);
   int comma4 = command.indexOf(':', comma3 + 1);
   int comma5 = command.indexOf(':', comma4 + 1);
+  int activeStatus = 1; // پیش‌فرض فعال
 
   String key = "s" + String(index + 1);
   strncpy(scenarios[index].key, key.c_str(), sizeof(scenarios[index].key) - 1);
@@ -2861,13 +2993,20 @@ bool processScenarios(String command, uint8_t index)
   {
     scenarios[index].threshold = val;
   }
-
+  if (command.endsWith(":0") || command.endsWith(":1"))
+  {
+    activeStatus = command.substring(command.lastIndexOf(":") + 1).toInt();
+    // command = command.substring(0, command.lastIndexOf(":"));
+    Serial.println(activeStatus);
+    Serial.println(command);
+  }
+  scenarios[index].active = (activeStatus == 1);
   scenarios[index].outPin = command.substring(comma3 + 1, comma4).toInt();
   scenarios[index].outState = command.substring(comma4 + 1).toInt();
   scenarios[index].swType = command.substring(comma5 + 1).toInt();
   scenarios[index].notif = command.substring(comma5 + 2).toInt();
-  Serial.println("scenarios[index].notif");
-  Serial.println(scenarios[index].notif);
+  Serial.println("scenarios[index].active");
+  Serial.println(scenarios[index].active);
 
   if (scenarios[index].input == -1 || scenarios[index].outPin == -1)
   {
@@ -2875,6 +3014,10 @@ bool processScenarios(String command, uint8_t index)
   }
   scenarios[index].value = command;
   return true;
+}
+
+void switchSceanario(const char *key, bool state)
+{
 }
 
 void handlePostRequest(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
@@ -3180,6 +3323,7 @@ void resetWifi()
   deleteData(LittleFS, m_server_k);
 
   hasWifi = false;
+  ESP.restart();
 }
 
 String createDateString(const struct tm &timeinfo, int timezoneOffset)
@@ -3250,6 +3394,40 @@ void checkSensors()
 
         Serial.printf("Sensor%d changed - old state:%d new state:%d\n",
                       i + 1, newState, !newState);
+
+        // اگر حالت امنیتی فعال باشد
+        if (securityMode)
+        {
+          if (newState == inputs[i].mode)
+          {
+            alerting = true;
+            // index of security output alert
+            for (uint8_t i = 0; i < sizeof(alertOutputs) / sizeof(alertOutputs[0]); i++)
+            {
+              switchRelay(alertOutputs[i], true, 0, true);
+            }
+            if (mqtt_connected)
+            {
+              DynamicJsonDocument doc(64);
+              doc["mac"] = mac;
+              doc["event"] = "security";
+              doc["iSt"] = createInArray();
+              String result;
+              serializeJson(doc, result);
+              Serial.println(result);
+              publishReport(result.c_str());
+            }
+            if (simInserted && phoneNo[0] != "")
+            {
+              ReplyHex("هشدار! آژیر دزدگیر فعال شد", phoneNo[0]);
+
+              if (callOnAlert)
+              {
+                callAlert();
+              }
+            }
+          }
+        }
 
         // ارسال گزارش در صورت اتصال MQTT
         if (mqtt_connected)
@@ -3893,6 +4071,39 @@ void compareRemote(String received)
         // Serial.print("Relay index: ");
         // Serial.println(index);
 
+        if (securityMode)
+        {
+          if (alerting)
+          {
+            alerting = false;
+            // index of security output alert
+            for (uint8_t i = 0; i < sizeof(alertOutputs) / sizeof(alertOutputs[0]); i++)
+            {
+              switchRelay(alertOutputs[i], false, 0, true);
+            }
+            if (mqtt_connected)
+            {
+              DynamicJsonDocument doc(64);
+              doc["mac"] = mac;
+              doc["event"] = "security";
+              doc["iSt"] = createInArray();
+              doc["alerting"] = false;
+              String result;
+              serializeJson(doc, result);
+              Serial.println(result);
+              publishReport(result.c_str());
+            }
+            if (simInserted && phoneNo[0] != "")
+            {
+              ReplyHex("آژیر دزدگیر خاموش شد", phoneNo[0]);
+
+              if (callOnAlert)
+              {
+                callAlert();
+              }
+            }
+          }
+        }
         String outPrg = outputIsBusy(index);
         if (outPrg.isEmpty())
         {
@@ -4061,18 +4272,16 @@ void initSms()
 
 void checkMqttStatus()
 {
+
   if (mqtt.connected())
   {
     mqtt.loop();
   }
-  else
+  else if (hasWifi || gprsConnected)
   {
     mqtt_connected = false;
+    // reconnect();
   }
-  // else if ((hasWifi || gprsConnected ))
-  // {
-  // reconnect();
-  // }
 }
 
 String SendShortCommand(String command, String response)
@@ -4244,7 +4453,7 @@ void GsmReset()
   delay(700);
 
   digitalWrite(RESET_GSM, LOW);
-  delay(1000);
+  delay(1500);
   digitalWrite(RESET_GSM, HIGH);
   delay(3000);
 }
@@ -4966,10 +5175,19 @@ void checkTasks()
   uint8_t hour = rtc.getHour(true);
   uint8_t minute = rtc.getMinute();
   updateDisplay();
+
+  if (!mqtt.connected())
+  {
+    mqtt_connected = false;
+  }
+  else
+  {
+    mqtt_connected = true;
+  }
   // count minutes
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
   //  one hour
-  if (minCounter >= 60)
+  if (minCounter > 60)
   {
     minCounter = 0;
     createMovingAverage();
@@ -4984,7 +5202,7 @@ void checkTasks()
     mqtt_count = 0;
     if (hasWifi)
     {
-      if (WiFi.status() != WL_CONNECTED && wifiTryCount < 3)
+      if (WiFi.status() != WL_CONNECTED && wifiTryCount < 6)
       {
         initWiFi();
       }
@@ -4997,7 +5215,7 @@ void checkTasks()
         // }
       }
     }
-    else if (ssid != "" && password != "" && wifiTryCount < 3)
+    else if (ssid != "" && password != "" && wifiTryCount < 10)
     {
       initWiFi();
     }
@@ -5022,15 +5240,19 @@ void checkTasks()
 
   if (minCounter % 5 == 0)
   {
-    if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 3)
+    if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 6)
     {
+      Serial.printf("ssid check 5 mins");
+
       initWiFi();
     }
   }
   if (minCounter % 2 == 0)
   {
-    if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 3)
+    if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 6)
     {
+      Serial.printf("ssid check 2 mins");
+
       initWiFi();
     }
     /// if has borker registered
@@ -6004,7 +6226,7 @@ String outputIsBusy(uint8_t index)
   for (int i = 0; i < totalScenarios; i++)
   {
     Scenario scenario = scenarios[i];
-    if (scenario.value.isEmpty() || scenario.value.charAt(0) == 'o')
+    if (scenario.value.isEmpty() || !scenario.active || scenario.value.charAt(0) == 'o')
       continue;
     uint8_t target = 100;
     // if (index == scenario.input)
@@ -6119,6 +6341,11 @@ void callAdmin(int index)
     Serial2.println("ATD+ " + phoneNo[0] + ";");
     addTask(hangUp, 20000); // اجرا پس از 20 ثانیه
   }
+}
+void callAlert()
+{
+  Serial2.println("ATD+ " + phoneNo[0] + ";");
+  addTask(hangUp, 20000); // اجرا پس از 20 ثانیه
 }
 
 void hangUp()
@@ -6262,6 +6489,7 @@ String createInArray()
   String result = "";
   for (uint8_t i = 0; i < totalInputs; i++)
   {
+     result += String(inputs[i].mode);
     result += String(!inputs[i].state);
     // if (i < (totalOutputs - 1)) {
     // result += ",";
@@ -6431,8 +6659,9 @@ String prepareDbData(String event)
   doc["sets"] = createSettingArray();
   doc["tims"] = createTimersArray();
   doc["progs"] = createScenariosArray();
-  doc["rfS"] = createRfArray();
+  // doc["rfS"] = createRfArray();
   doc["oSt"] = createOutArray();
+  doc["ver"] = F_VERSION;
   doc["iSt"] = createInArray();
   doc["pwm"] = createPwmArray();
   doc["curr"] = currentAmp.value;
@@ -6647,5 +6876,13 @@ void update_progress(int cur, int total)
 {
   Serial.printf("CALLBACK:  HTTP update process at %d of %d bytes...\n", cur, total);
   int p = (cur * 100) / total;
-  loadingDisplay(cur, "Updating");
+  if (p < 100)
+  {
+
+    loadingDisplay(p, "Updating");
+  }
+  else
+  {
+    loadingDisplay(p, "Update Done!");
+  }
 }
