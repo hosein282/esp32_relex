@@ -140,6 +140,17 @@ enum MQTT_NET
 };
 MQTT_NET mqttNet = OFF;
 
+enum MQTT_FILTER
+{
+  FULL,
+  OUT,
+  IN,
+  TIMER,
+  SCENARIO,
+  TEMP,
+  ADC
+};
+
 uint8_t signalQuality = 0;
 uint8_t wifiTryCount = 0;
 
@@ -221,19 +232,19 @@ String phoneNo[totalPhoneNo] = {"", "", "", "", ""};
 int8_t toggleTimers[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
 
 Input inputs[totalInputs] = {
-    {"il1", "in1", "", 0.0, 1,0, 7, 0, 0.0, {}},
-    {"il2", "in2", "", 0.0, 1,0, 6, 0, 0.0, {}},
-    {"il3", "in3", "", 0.0, 1,0, 5, 0, 0.0, {}},
-    {"il4", "in4", "", 0.0, 1,0, 4, 0, 0.0, {}},
-    {"il5", "in5", "", 0.0, 1,0, 3, 0, 0.0, {}},
-    {"il6", "in6", "", 0.0, 1,0, 2, 0, 0.0, {}},
-    {"il7", "in7", "", 0.0, 1,0, 1, 0, 0.0, {}},
-    {"il8", "in8", "", 0.0, 1,0, 0, 0, 0.0, {}},
+    {"il1", "in1", "", 0.0, 1, 0, 7, 0, 0.0, {}},
+    {"il2", "in2", "", 0.0, 1, 0, 6, 0, 0.0, {}},
+    {"il3", "in3", "", 0.0, 1, 0, 5, 0, 0.0, {}},
+    {"il4", "in4", "", 0.0, 1, 0, 4, 0, 0.0, {}},
+    {"il5", "in5", "", 0.0, 1, 0, 3, 0, 0.0, {}},
+    {"il6", "in6", "", 0.0, 1, 0, 2, 0, 0.0, {}},
+    {"il7", "in7", "", 0.0, 1, 0, 1, 0, 0.0, {}},
+    {"il8", "in8", "", 0.0, 1, 0, 0, 0, 0.0, {}},
 };
 
 Input analogInputs[totalAnalogs] = {
-    {"al1", "a1", "", 0, 0,0, 36, 0, 0.0, {}},
-    {"al2", "a2", "", 0, 0,0, 35, 0, 0.0, {}}};
+    {"al1", "a1", "", 0, 0, 0, 36, 0, 0.0, {}},
+    {"al2", "a2", "", 0, 0, 0, 35, 0, 0.0, {}}};
 
 output outputs[totalOutputs] = {
     {"lab1", "sch1", 8, 1, "", "", 0, 0, 0},
@@ -475,13 +486,14 @@ void callback(char *topic, byte *payload, unsigned int length)
 
     ///////////////////////////////////////////////////////////////////////////
   }
-  else if(event == "inType"){
-        String type = doc["type"].as<String>();
+  else if (event == "inType")
+  {
+    String type = doc["type"].as<String>();
 
-      inputs[out].mode = type == "1" ?  1 : 0;
-        writeToEEPROM("iT", inStates); // sls save last sat
+    inputs[out].mode = type == "1" ? 1 : 0;
+    writeToEEPROM("iT", inStates); // sls save last sat
 
-       if (mqtt_connected)
+    if (mqtt_connected)
     {
       DynamicJsonDocument doc(64);
       doc["mac"] = mac;
@@ -492,7 +504,6 @@ void callback(char *topic, byte *payload, unsigned int length)
       Serial.println(result);
       publishReport(result.c_str());
     }
-
   }
   else if (event == "son")
   {
@@ -666,9 +677,10 @@ void callback(char *topic, byte *payload, unsigned int length)
       Serial.println(text);
       return;
     }
-    writeDateTimeEEPROM(outputs[out].timerKey, tempSch);
+    // writeDateTimeEEPROM(outputs[out].timerKey, tempSch);
+    saveSchedule(out, tempSch);
     outputs[out].timer = tempSch;
-    String result = prepareDbData("feedback");
+    String result = prepareDbData("feedback", TIMER);
     publishReport(result.c_str());
 
     String text;
@@ -725,7 +737,7 @@ void callback(char *topic, byte *payload, unsigned int length)
       String text = addScenario(tempPrg);
       if (text != "")
       {
-        String result = prepareDbData("feedback");
+        String result = prepareDbData("feedback", SCENARIO);
         publishReport(result.c_str());
 
         debugPrint("Input " + key + " is Set :");
@@ -759,12 +771,12 @@ void callback(char *topic, byte *payload, unsigned int length)
       }
     }
     // ارسال فیدبک
-    String result = prepareDbData("feedback");
+    String result = prepareDbData("feedback", SCENARIO);
     publishReport(result.c_str());
   }
   else if (event == "status")
   {
-    String result = prepareDbData("feedback");
+    String result = prepareDbData("feedback", FULL);
 
     publishReport(result.c_str());
 
@@ -987,7 +999,7 @@ void reconnect()
       Serial.println(myTopic);
       // Once connected, publish an announcement...
       // String sts = prepareDbData("report");
-      String result = prepareDbData("feedback");
+      String result = prepareDbData("feedback", FULL);
 
       publishReport(result.c_str());
 
@@ -1096,11 +1108,37 @@ void deleteData(fs::FS &fs, const char *path)
   fs.remove(path);
 }
 
+bool saveSchedule(int index, const String &data)
+{
+  String path = "/sch" + String(index);
+  File file = LittleFS.open(path, "w");
+  if (!file)
+  {
+    Serial.println("Failed to open file for writing: " + path);
+    return false;
+  }
+  file.print(data);
+  file.close();
+  return true;
+}
+String loadSchedule(int index)
+{
+  String path = "/sch" + String(index);
+  File file = LittleFS.open(path, "r");
+  if (!file)
+  {
+    Serial.println("File not found: " + path);
+    return "";
+  }
+  String data = file.readString();
+  file.close();
+  return data;
+}
 // Initialize WiFi
 bool initWiFi()
 {
   wifiTryCount++;
-  if (wifiTryCount > 3)
+  if (wifiTryCount > 6)
   {
     Serial.println("Wifi try count is over");
     return false;
@@ -1120,7 +1158,6 @@ bool initWiFi()
   }
 
   WiFi.mode(WIFI_STA);
-
   // localIP.fromString(ip.c_str());
   // localGateway.fromString(gateway.c_str());
 
@@ -1134,50 +1171,71 @@ bool initWiFi()
   unsigned long currentMillis = millis();
   previousMillis = currentMillis;
 
-  // if (WiFi.status() != WL_CONNECTED)
-  // {
-  //   Serial.println("Failed to connect.");
-  //   digitalWrite(STATUS_LED, LOW);
-  //   return false;
-  // }
-
   while (WiFi.status() != WL_CONNECTED)
   {
     currentMillis = millis();
-    if (currentMillis - previousMillis >= 5000)
+    if (currentMillis - previousMillis >= 10000)
     {
-      digitalWrite(STATUS_LED, LOW);
-
       Serial.println("Failed to connect.");
       // resetWifi();
       return false;
     }
   }
-  digitalWrite(STATUS_LED, HIGH);
 
-  if (!MDNS.begin("hubway"))
-  { // Set the hostname to "esp32.local"
-    Serial.println("Error setting up MDNS responder!");
-  }
 
-  Serial.print("Current ESP32 IP: ");
-  Serial.println(WiFi.localIP());
-  hasWifi = true;
-  esp_task_wdt_reset();
+  // Serial.println("Connecting to WiFi...");
 
-  printLocalTime();
+  // // unsigned long currentMillis = millis();
+  // // previousMillis = currentMillis;
+  // uint8_t count = 0;
+  // while (WiFi.begin(ssid, password) != WL_CONNECTED && count < 3)
+  // {
+  //   Serial.printf("try %d", count + 1);
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send_P(200, "text/html", index_html, processor); });
-  // server.serveStatic("/", LittleFS, "/");// uncomment
+  //   delay(5000);
+  //   count++;
+  //   // currentMillis = millis();
+  //   // if (currentMillis - previousMillis >= 5000)
+  //   // {
+  //   //   digitalWrite(STATUS_LED, LOW);
+  //   //   Serial.println("Failed to connect.");
+  //   //   // resetWifi();
+  //   //   return false;
+  //   // }
+  // }
+  // if (WiFi.status() != WL_CONNECTED)
+  // {
+  //   digitalWrite(STATUS_LED, LOW);
+  //   Serial.println("Failed to connect.");
+  //   // resetWifi();
+  //   return false;
+  // }
+  // else
+  // {
+    digitalWrite(STATUS_LED, HIGH);
+    if (!MDNS.begin("hubway"))
+    { // Set the hostname to "esp32.local"
+      Serial.println("Error setting up MDNS responder!");
+    }
 
-  server.on(
-      "/sw", HTTP_POST, [](AsyncWebServerRequest *request)
-      { Serial.println("sw"); },
-      NULL, handlePostRequest);
-  // Send a GET request to <ESP_IP>/update?output=<inputMessage1>&state=<inputMessage2>
-  server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
+    Serial.print("Current ESP32 IP: ");
+    Serial.println(WiFi.localIP());
+    hasWifi = true;
+    esp_task_wdt_reset();
+
+    printLocalTime();
+
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send_P(200, "text/html", index_html, processor); });
+    // server.serveStatic("/", LittleFS, "/");// uncomment
+
+    server.on(
+        "/sw", HTTP_POST, [](AsyncWebServerRequest *request)
+        { Serial.println("sw"); },
+        NULL, handlePostRequest);
+    // Send a GET request to <ESP_IP>/update?output=<inputMessage1>&state=<inputMessage2>
+    server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request)
+              {
     String inputMessage1;
     String inputMessage2;
     // GET input1 value on <ESP_IP>/update?output=<inputMessage1>&state=<inputMessage2>
@@ -1201,7 +1259,9 @@ bool initWiFi()
       } else {
         //set new timer
         uint8_t index = inputMessage1.toInt();
-        writeDateTimeEEPROM(outputs[index].timerKey, inputMessage2);
+        // writeDateTimeEEPROM(outputs[index].timerKey, inputMessage2);
+            saveSchedule(index,inputMessage2);
+
         outputs[index].timer = inputMessage2;
         debugPrint("Relay 1 is Set :");
         debugPrint(inputMessage2);
@@ -1243,9 +1303,9 @@ bool initWiFi()
     Serial.println(inputMessage2);
     request->send(200, "text/plain", "OK"); });
 
-  server.on(
-      "/label", HTTP_POST, [](AsyncWebServerRequest *request)
-      {
+    server.on(
+        "/label", HTTP_POST, [](AsyncWebServerRequest *request)
+        {
       Serial.println("body:");
       uint8_t paramsNr = request->params();
       Serial.println(paramsNr);
@@ -1276,26 +1336,27 @@ bool initWiFi()
         response->addHeader("Connection", "close");
         request->send(response);
       } });
-  // Handle Web Server Events
-  events.onConnect([](AsyncEventSourceClient *client)
-                   {
-                     if (deviceYear < 20)
+    // Handle Web Server Events
+    events.onConnect([](AsyncEventSourceClient *client)
                      {
-                       events.send("", "date", millis());
-                     }
-                     if (client->lastId())
-                     {
-                       Serial.printf("Client reconnected! Last message ID that it got is: %u\n", client->lastId());
-                     }
-                     // send event with message "hello!", id current millis
-                     // and set reconnect delay to 1 second
-                     // client->send("hello!", NULL, millis(), 10000);
-                   });
+                       if (deviceYear < 20)
+                       {
+                         events.send("", "date", millis());
+                       }
+                       if (client->lastId())
+                       {
+                         Serial.printf("Client reconnected! Last message ID that it got is: %u\n", client->lastId());
+                       }
+                       // send event with message "hello!", id current millis
+                       // and set reconnect delay to 1 second
+                       // client->send("hello!", NULL, millis(), 10000);
+                     });
 
-  server.addHandler(&events);
+    server.addHandler(&events);
 
-  server.begin();
-  return true;
+    server.begin();
+    return true;
+  // }
 }
 
 bool addTask(void (*taskFunction)(), unsigned long delay)
@@ -2784,7 +2845,8 @@ void setupVariables()
   Serial.println("List of Schedules");
   for (uint8_t i = 0; i < totalOutputs; i++)
   {
-    outputs[i].timer = readFromEEPROM(outputs[i].timerKey);
+    outputs[i].timer = loadSchedule(i);
+    // readFromEEPROM(outputs[i].timerKey);
     if (outputs[i].timer.length() < 2)
     {
       outputs[i].timer = "";
@@ -2849,10 +2911,11 @@ void setupVariables()
     }
   }
 
-       inStates =   readFromEEPROM("iT"); // input types
-       Serial.printf("inStates : %s" , inStates);
-  for (uint8_t i = 0; i < totalInputs; i++){
-     inputs[i].mode = inStates[i] == '1' ? 1 : 0;
+  inStates = readFromEEPROM("iT"); // input types
+  Serial.printf("inStates : %s", inStates);
+  for (uint8_t i = 0; i < totalInputs; i++)
+  {
+    inputs[i].mode = inStates[i] == '1' ? 1 : 0;
   }
   // MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
   Serial.println("List of Remotes");
@@ -3075,7 +3138,7 @@ void handlePostRequest(AsyncWebServerRequest *request, uint8_t *data, size_t len
     Serial.println(jsonBuffer);
     // "{\"status\":\"received\"}"
     request->send(200, "application/json", jsonBuffer);
-    delay(3000);
+    delay(1500);
     ESP.restart();
   }
   else
@@ -3166,6 +3229,8 @@ void initWifiAp()
         //set new timer
         uint8_t index = inputMessage1.toInt();
         writeDateTimeEEPROM(outputs[index].timerKey, inputMessage2);
+            saveSchedule(index,inputMessage2);
+
         outputs[index].timer = inputMessage2;
         debugPrint("Relay 1 is Set :");
         debugPrint(inputMessage2);
@@ -3323,7 +3388,6 @@ void resetWifi()
   deleteData(LittleFS, m_server_k);
 
   hasWifi = false;
-  ESP.restart();
 }
 
 String createDateString(const struct tm &timeinfo, int timezoneOffset)
@@ -3549,6 +3613,8 @@ void readButton()
     if (pressDuration > SUPER_LONG_TIME)
     {
       resetWifi();
+      delay(3000);
+      ESP.restart();
     }
     else if (pressDuration > VERY_LONG_TIME)
     {
@@ -4587,7 +4653,7 @@ void removeScenario(const char *key)
   }
 
   Serial.println("scenario deleted");
-  String result = prepareDbData("feedback");
+  String result = prepareDbData("feedback", SCENARIO);
   publishReport(result.c_str());
 }
 
@@ -5240,18 +5306,25 @@ void checkTasks()
 
   if (minCounter % 5 == 0)
   {
+    Serial.printf("check 5 mins");
+    Serial.printf("ssid %s", ssid);
+    Serial.printf("password %s", password);
+
     if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 6)
     {
-      Serial.printf("ssid check 5 mins");
+      Serial.printf("wifi retry 5 mins");
 
       initWiFi();
     }
   }
   if (minCounter % 2 == 0)
   {
+    Serial.printf("check 2 mins");
+    Serial.printf("ssid %s", ssid);
+    Serial.printf("password %s", password);
     if (ssid != "" && password != "" && WiFi.status() != WL_CONNECTED && wifiTryCount < 6)
     {
-      Serial.printf("ssid check 2 mins");
+      Serial.printf("wifi retry 2 mins");
 
       initWiFi();
     }
@@ -5692,7 +5765,9 @@ void setPwm(uint8_t index, uint8_t percent)
  ******************************************************************************/
 void clearTimer(uint8_t index)
 {
-  writeDateTimeEEPROM(outputs[index].timerKey, "");
+  // writeDateTimeEEPROM(outputs[index].timerKey, "");
+  saveSchedule(index, "");
+
   outputs[index].timer = "";
   Serial.print("cleared timer ");
   Serial.println(index);
@@ -5964,7 +6039,9 @@ void doAction(String phoneNumber)
       ReplyHex(text, phoneNumber);
       return;
     }
-    writeDateTimeEEPROM(outputs[index].timerKey, tempSch);
+    // writeDateTimeEEPROM(outputs[index].timerKey, tempSch);
+    saveSchedule(index, tempSch);
+
     outputs[index].timer = tempSch;
     String text;
     if (tempSch.length() >= 2 && tempSch.length() < 6 && tempSch.charAt(0) != 't')
@@ -6047,7 +6124,9 @@ void doAction(String phoneNumber)
   else if (msg.indexOf("t") != -1 && msg.indexOf("x") != -1)
   {
     uint8_t out = (msg.substring(1, 2).toInt()) - 1;
-    writeDateTimeEEPROM(outputs[out].timerKey, "");
+    // writeDateTimeEEPROM(outputs[out].timerKey, "");
+    saveSchedule(out, "");
+
     outputs[out].timer = "";
     toggleTimers[out] = -1;
 
@@ -6489,7 +6568,7 @@ String createInArray()
   String result = "";
   for (uint8_t i = 0; i < totalInputs; i++)
   {
-     result += String(inputs[i].mode);
+    result += String(inputs[i].mode);
     result += String(!inputs[i].state);
     // if (i < (totalOutputs - 1)) {
     // result += ",";
@@ -6647,37 +6726,58 @@ String createRfArray()
   return str;
 }
 
-String prepareDbData(String event)
+String prepareDbData(String event, MQTT_FILTER filter)
 {
   StaticJsonDocument<512> doc;
   doc["op"] = op;
   doc["sig"] = String(signalQuality);
   doc["mac"] = mac;
   doc["event"] = event;
-  // doc["status"] = "ONLINE";
   doc["net"] = mqttNet;
-  doc["sets"] = createSettingArray();
-  doc["tims"] = createTimersArray();
-  doc["progs"] = createScenariosArray();
-  // doc["rfS"] = createRfArray();
-  doc["oSt"] = createOutArray();
   doc["ver"] = F_VERSION;
-  doc["iSt"] = createInArray();
-  doc["pwm"] = createPwmArray();
+  doc["sets"] = createSettingArray();
   doc["curr"] = currentAmp.value;
-  sensors.requestTemperatures();
-
-  JsonArray array1 = doc.createNestedArray("temps");
-  for (uint8_t i = 0; i < totalTemps; i++)
+  // doc["status"] = "ONLINE";
+  if (filter == TIMER || filter == FULL)
   {
-    temps[i].temp = sensors.getTempCByIndex(i);
-    array1.add(temps[i].temp);
+    doc["tims"] = createTimersArray();
   }
-  JsonArray array2 = doc.createNestedArray("ain");
-
-  for (uint8_t i = 0; i < totalAnalogs; i++)
+  if (filter == SCENARIO || filter == FULL)
   {
-    array2.add(analogInputs[i].voltage);
+    doc["progs"] = createScenariosArray();
+  }
+  if (filter == OUT || filter == FULL)
+  {
+
+    doc["oSt"] = createOutArray();
+    doc["pwm"] = createPwmArray();
+  }
+
+  // doc["rfS"] = createRfArray();
+  if (filter == IN || filter == FULL)
+  {
+    doc["iSt"] = createInArray();
+  }
+  if (filter == TEMP || filter == FULL)
+  {
+
+    sensors.requestTemperatures();
+
+    JsonArray array1 = doc.createNestedArray("temps");
+    for (uint8_t i = 0; i < totalTemps; i++)
+    {
+      temps[i].temp = sensors.getTempCByIndex(i);
+      array1.add(temps[i].temp);
+    }
+  }
+  if (filter == ADC || filter == FULL)
+  {
+    JsonArray array2 = doc.createNestedArray("ain");
+
+    for (uint8_t i = 0; i < totalAnalogs; i++)
+    {
+      array2.add(analogInputs[i].voltage);
+    }
   }
 
   String result;
